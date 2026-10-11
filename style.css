@@ -167,3 +167,11 @@ footer a { color: inherit; }
   .kv dd { margin-bottom: 6px }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+.opp-head { display: flex; gap: 14px; align-items: center; }
+.opp-head .sd { width: 96px; height: 96px; object-fit: contain; flex: none; filter: drop-shadow(0 2px 4px rgba(0,0,0,.25)); }
+.opp-head-text { min-width: 0; }
+.opp-head h2 { margin-bottom: 4px; }
+.name-cell { white-space: nowrap; }
+.sd-mini { width: 28px; height: 28px; object-fit: contain; vertical-align: middle; margin-right: 6px; }
+@media (max-width: 480px) { .opp-head .sd { width: 72px; height: 72px; } }

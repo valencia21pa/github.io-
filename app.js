@@ -54,6 +54,10 @@ function pairData(key = pairKey()) {
   d.drills = d.drills || {}; d.customDrills = d.customDrills || []; d.notes = d.notes || {};
   return d;
 }
+// SDキャラ画像（assets/sd/<id>.png）。アーティファクト版はビルド時に data URI に置換される
+const SD_IDS = new Set(["sol","ky","may","axl","chipp","potemkin","faust","millia","zato","ramlethal","leo","nagoriyuki","giovanna","anji","ino","goldlewis","jacko","chaos","baiken","testament","bridget","sin","bedman","asuka","johnny","elphelt","aba","slayer","dizzy","venom","unika","lucy","jam","roboky"]);
+const SD_DATA = typeof SD_IMAGES !== "undefined" ? SD_IMAGES : null;
+const sdSrc = id => SD_DATA ? (SD_DATA[id] || "") : (SD_IDS.has(id) ? `assets/sd/${id}.png` : "");
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const today = () => new Date().toISOString().slice(0, 10);
 const $ = id => document.getElementById(id);
@@ -170,8 +174,13 @@ function renderGuide(opp) {
       <ul class="tips">${g[s.key].map(t => `<li>${esc(t)}</li>`).join("")}</ul>
     </details>`).join("");
   return `
-    <h2>相手：${esc(opp.name)}</h2>
-    <div class="tags">${(opp.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div>
+    <div class="opp-head">
+      ${sdSrc(opp.id) ? `<img class="sd" src="${sdSrc(opp.id)}" alt="">` : ""}
+      <div class="opp-head-text">
+        <h2>相手：${esc(opp.name)}</h2>
+        <div class="tags">${(opp.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div>
+      </div>
+    </div>
     <p class="core">${esc(g.core)}</p>
     <div class="row between" style="margin:6px 0 2px"><h3 style="margin:0">対策の基本</h3><button class="small" id="guideToggle">すべて開く</button></div>
     ${sections}`;
@@ -418,7 +427,7 @@ function renderList() {
   });
   $("listBody").innerHTML = rows.map(r => `
     <tr class="clickable" data-go="${esc(r.c.id)}">
-      <td>${esc(r.c.name)}</td>
+      <td class="name-cell">${sdSrc(r.c.id) ? `<img class="sd-mini" src="${sdSrc(r.c.id)}" alt="">` : ""}${esc(r.c.name)}</td>
       <td>${r.d.diff ? "★".repeat(r.d.diff) : "<span class='muted'>—</span>"}</td>
       <td class="num">${r.r.games || "<span class='muted'>0</span>"}</td>
       <td class="num">${r.r.games ? Math.round(r.r.rate * 100) + "%" : "<span class='muted'>—</span>"}</td>

@@ -2,7 +2,7 @@
 """index.html + style.css + data/*.js + app.js を 1 ファイルにまとめる。
 claude.ai のアーティファクト用（doctype/head/body なしの断片）と、
 単体配布用の完全な HTML（--full）の両方を出せる。"""
-import re, sys, pathlib, base64
+import re, sys, pathlib, base64, json
 
 root = pathlib.Path(__file__).parent
 html = (root / "index.html").read_text(encoding="utf-8")
@@ -18,6 +18,17 @@ body = re.sub(r'<script src="[^"]*"></script>\s*', "", body)
 hero = root / ("assets/hero-small.jpg" if "--small-hero" in sys.argv else "assets/hero.jpg")
 if hero.exists():
     body = body.replace('src="assets/hero.jpg"', 'src="data:image/jpeg;base64,' + base64.b64encode(hero.read_bytes()).decode() + '"')
+
+# SDキャラを data URI で埋め込む（--sd-dir <dir> に webp/png があれば）
+sd_js = ""
+if "--sd-dir" in sys.argv:
+    d = pathlib.Path(sys.argv[sys.argv.index("--sd-dir") + 1]); imgs = {}
+    for f in sorted(d.iterdir()):
+        if f.suffix in (".webp", ".png"):
+            mime = "image/webp" if f.suffix == ".webp" else "image/png"
+            imgs[f.stem] = f"data:{mime};base64," + base64.b64encode(f.read_bytes()).decode()
+    sd_js = "const SD_IMAGES = " + json.dumps(imgs) + ";\n"
+scripts = sd_js + scripts
 
 head = f"<title>{title}</title>\n{fonts}\n<style>\n{css}</style>\n"
 tail = f"<script>\n{scripts}\n</script>\n"
