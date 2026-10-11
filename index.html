@@ -136,6 +136,13 @@
     <div class="card">
       <div class="row between">
         <h2 style="margin:0">分析</h2>
+        <label class="field narrow">記録元
+          <select id="anaSource">
+            <option value="all">すべて</option>
+            <option value="puddle">Puddle Farm</option>
+            <option value="manual">手入力</option>
+          </select>
+        </label>
         <label class="field narrow">対象
           <select id="anaScope">
             <option value="mine">自キャラの全試合</option>
@@ -194,6 +201,19 @@
       </div>
     </div>
     <div class="card">
+      <h2>ランクマ戦績を取り込む（Puddle Farm）</h2>
+      <p class="muted">Puddle Farm の自分のプレイヤーページ（例：<code>puddle.farm/ggst/player/【ID】/AB</code>）を Chrome で「名前を付けて保存」（.mht か .html）して読み込むか、ページ全体をコピーして下に貼り付けてください。セット単位で取り込まれ、同じ時刻のセットは重複しません。</p>
+      <div class="row">
+        <label class="field narrow">保存したページを読み込み
+          <input type="file" id="importPuddleFile" accept=".mht,.mhtml,.html,.htm,.txt,.json,text/html,text/plain,application/json">
+        </label>
+        <button id="clearPuddle">取り込んだ戦績を削除</button>
+      </div>
+      <textarea id="puddleText" rows="4" placeholder="ページ全体をコピーしてここに貼り付け" style="margin-top:8px"></textarea>
+      <div class="row" style="margin-top:6px"><button class="small" id="importPuddleText">貼り付けた内容を読み込み</button><span class="muted" id="puddleMsg"></span></div>
+      <div class="muted" id="puddleStatus" style="margin-top:8px"></div>
+    </div>
+    <div class="card">
       <h2>フレームデータを取り込む（Dustloop）</h2>
       <p class="muted">Dustloop の Cargo API から書き出した JSON を読み込みます。ブラウザで下のURLを開いて「名前を付けて保存」し、そのファイルを選んでください。<code>chara=</code> の部分を変えるとキャラを選べます（複数回読み込めば追加されます）。全キャラ一括は <code>where</code> を省略して <code>limit=5000</code> にしてください。</p>
       <pre class="code" id="dlUrl"></pre>
@@ -234,6 +254,7 @@
 <script src="data/aba.js"></script>
 <script src="data/drills.js"></script>
 <script src="data/frames.js"></script>
+<script src="data/puddle-seed.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

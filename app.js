@@ -17,7 +17,11 @@ const CAUSES = [
 const DL_URL = 'https://www.dustloop.com/wiki/api.php?action=cargoquery&tables=MoveData_GGST&fields=chara,name,input,startup,active,recovery,onBlock,onHit,guard,level&where=chara%3D%22A.B.A%22&limit=500&format=json';
 
 const STORE_KEY = "ggst-matchup-v1";
-const DEFAULT_STATE = () => ({ mine: "aba", opp: "sol", custom: [], pairs: {}, log: [], frames: {} });
+const DEFAULT_STATE = () => ({ mine: "aba", opp: "sol", custom: [], pairs: {}, log: [], frames: {}, puddle: [], puddleMeta: {} });
+
+// Puddle Farm のキャラ略号 → このツールの id
+const PUDDLE_CODES = { SO: "sol", KY: "ky", MA: "may", AX: "axl", CH: "chipp", PO: "potemkin", FA: "faust", MI: "millia", ZA: "zato", RA: "ramlethal", LE: "leo", NA: "nagoriyuki", GI: "giovanna", AN: "anji", IN: "ino", GO: "goldlewis", JC: "jacko", HA: "chaos", BA: "baiken", TE: "testament", BI: "bridget", SI: "sin", BE: "bedman", AS: "asuka", JN: "johnny", EL: "elphelt", AB: "aba", SL: "slayer", DI: "dizzy", VE: "venom", UN: "unika", LU: "lucy", JA: "jam", RK: "roboky" };
+const PUDDLE_ID = (code) => PUDDLE_CODES[code] || null;
 let state = DEFAULT_STATE();
 
 // ---- 保存・読み込み ----
@@ -62,12 +66,74 @@ function armed(btn, label = "もう一度押すと実行") {
 }
 function notify(id, msg, ms = 4000) { const el = $(id); if (!el) return; el.textContent = msg; clearTimeout(el._t); el._t = setTimeout(() => el.textContent = "", ms); }
 
-// 戦績 = 旧手動カウント + 試合ログ
+// Puddle Farm のセット（1セット＝先に2本取った方が勝ち。1-1 などの引き分けは除外）を試合ログと同じ形に
+function puddleGames() {
+  return (state.puddle || []).filter(s => s.oppId && s.result !== "D").map(s => ({
+    id: "pf_" + s.time, date: s.time.slice(0, 10), mine: s.mine || "aba", opp: s.oppId, result: s.result,
+    causes: [], memo: "", source: "puddle", rating: s.rating, oppRating: s.oppRating, change: s.change, oppName: s.oppName, score: s.score,
+  }));
+}
+// 手入力ログ + Puddle Farm を時系列で
+function allGames() {
+  return state.log.map(g => ({ ...g, source: g.source || "manual" })).concat(puddleGames())
+    .sort((x, y) => (x.date + (x.time || "")).localeCompare(y.date + (y.time || "")));
+}
+// 戦績 = 旧手動カウント + 試合ログ + Puddle Farm
 function record(mine, opp) {
   const d = state.pairs[pairKeyOf(mine, opp)] || { wins: 0, losses: 0 };
   let w = d.wins || 0, l = d.losses || 0;
-  for (const g of state.log) if (g.mine === mine && g.opp === opp) (g.result === "W" ? w++ : l++);
+  for (const g of allGames()) if (g.mine === mine && g.opp === opp) (g.result === "W" ? w++ : l++);
   return { w, l, games: w + l, rate: w + l ? w / (w + l) : -1 };
+}
+
+// ---- Puddle Farm 取り込み ----
+// 対応形式: (a) プレイヤーページを「名前を付けて保存」した .mht / .html、(b) ページ全体をコピーしたテキスト、
+//           (c) このツールが書き出した JSON 配列 [{time, result, char, rating, opp_rating, change, opp_name}]
+function parsePuddle(text) {
+  let rows = [];
+  try { const j = JSON.parse(text); if (Array.isArray(j)) rows = j; } catch (_) {}
+  if (!rows.length) {
+    let t = text;
+    if (/<html|<div|<body/i.test(t)) {
+      t = t.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, "").replace(/<[^>]+>/g, "\n");
+      const ta = document.createElement("textarea"); ta.innerHTML = t; t = ta.value;
+    }
+    // .mht は quoted-printable (=3D, 行末 =) と \uXXXX を含むことがある
+    t = t.replace(/=\r?\n/g, "").replace(/=([0-9A-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+    t = t.replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+    const L = t.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+    for (let i = 1; i < L.length; i++) {
+      if (L[i] === "Time" && L[i + 2] === "Rating" && L[i + 4] === "Result" && L[i + 6] === "Char") {
+        rows.push({ opp_name: L[i - 1], time: L[i + 1], rating: parseInt(L[i + 3]), result: L[i + 5], char: L[i + 7],
+          opp_rating: parseInt(L[i + 9]), change: L[i + 10] === "Change" ? parseInt(L[i + 11].replace("+", "")) : null });
+        i += 11;
+      }
+    }
+  }
+  const out = [];
+  for (const r of rows) {
+    const m = /^(\d+)\s*-\s*(\d+)$/.exec(String(r.result || "").trim()); if (!m || !r.time) continue;
+    const a = +m[1], b = +m[2];
+    out.push({ time: String(r.time).replace("T", " ").slice(0, 19), score: `${a}-${b}`, result: a > b ? "W" : a < b ? "L" : "D",
+      char: r.char, oppId: PUDDLE_ID(r.char), rating: +r.rating || null, oppRating: +r.opp_rating || null,
+      change: r.change == null || isNaN(+r.change) ? null : +r.change, oppName: r.opp_name || "", mine: state.mine });
+  }
+  return out;
+}
+function importPuddle(text) {
+  const rows = parsePuddle(text);
+  if (!rows.length) throw new Error("Puddle Farm の対戦履歴が見つかりませんでした（プレイヤーページの保存ファイルか、ページ全体をコピーした文字列を貼ってください）");
+  const have = new Set((state.puddle || []).map(s => s.time));
+  const added = rows.filter(r => !have.has(r.time));
+  state.puddle = (state.puddle || []).concat(added).sort((x, y) => x.time.localeCompare(y.time));
+  const unknown = [...new Set(rows.filter(r => !r.oppId).map(r => r.char))];
+  const latest = state.puddle[state.puddle.length - 1];
+  state.puddleMeta = { lastRating: latest?.rating, lastTime: latest?.time, count: state.puddle.length };
+  return { added: added.length, total: state.puddle.length, unknown };
+}
+function renderPuddleStatus() {
+  const n = (state.puddle || []).length, m = state.puddleMeta || {};
+  $("puddleStatus").textContent = n ? `取り込み済み：${n} セット（最新 ${m.lastTime || ""}、${m.lastRating ? m.lastRating + " RP" : ""}）` : "取り込み済みのセットはありません";
 }
 
 // ---- セレクト ----
@@ -266,14 +332,14 @@ function renderLogForm() {
   $("causeChips").innerHTML = CAUSES.map(c => `<button data-cause="${esc(c)}" class="${logDraft.causes.has(c) ? "on" : ""}">${esc(c)}</button>`).join("");
 }
 function renderLogTable() {
-  const rows = state.log.slice().reverse().slice(0, 50);
+  const rows = allGames().reverse().slice(0, 80);
   $("logBody").innerHTML = rows.length ? rows.map(g => `
     <tr class="log-row">
-      <td>${esc(g.date)}</td><td>${esc(charById(g.mine).name)}</td><td>${esc(charById(g.opp).name)}</td>
-      <td class="${g.result === "W" ? "win" : "lose"}"><b>${g.result === "W" ? "勝" : "負"}</b></td>
-      <td class="causes">${(g.causes || []).map(esc).join("、")}</td>
+      <td>${esc(g.date)}${g.source === "puddle" ? " <span class='tag neutral' title='Puddle Farm'>PF</span>" : ""}</td><td>${esc(charById(g.mine).name)}</td><td>${esc(charById(g.opp).name)}</td>
+      <td class="${g.result === "W" ? "win" : "lose"}"><b>${g.result === "W" ? "勝" : "負"}</b>${g.score ? ` <small class="muted">${esc(g.score)}</small>` : ""}</td>
+      <td class="causes">${g.source === "puddle" ? `<span class="muted">${esc(g.oppName)} ${g.oppRating ? g.oppRating.toLocaleString() + "RP" : ""} ${g.change != null ? (g.change >= 0 ? "+" : "") + g.change : ""}</span>` : (g.causes || []).map(esc).join("、")}</td>
       <td class="muted">${esc(g.memo || "")}</td>
-      <td><button class="small" data-dellog="${esc(g.id)}">×</button></td>
+      <td>${g.source === "puddle" ? "" : `<button class="small" data-dellog="${esc(g.id)}">×</button>`}</td>
     </tr>`).join("") : "<tr><td colspan='7' class='muted'>まだ記録がありません</td></tr>";
 }
 function addGame(result, causes = [], memo = "", date = today()) {
@@ -283,8 +349,8 @@ function addGame(result, causes = [], memo = "", date = today()) {
 
 // ---- 分析 ----
 function renderAnalysis() {
-  const scope = $("anaScope").value;
-  const games = state.log.filter(g => scope === "all" || (g.mine === state.mine && (scope === "mine" || g.opp === state.opp)));
+  const scope = $("anaScope").value, src = $("anaSource").value;
+  const games = allGames().filter(g => (src === "all" || g.source === src) && (scope === "all" || (g.mine === state.mine && (scope === "mine" || g.opp === state.opp))));
   const w = games.filter(g => g.result === "W").length, l = games.length - w;
   const recent = games.slice(-20);
   const rw = recent.filter(g => g.result === "W").length;
@@ -298,7 +364,8 @@ function renderAnalysis() {
     <div><div class="muted">試合数</div><div style="font-size:1.6rem;font-weight:700">${games.length}</div><div class="muted"><span class="win">${w}勝</span> / <span class="lose">${l}敗</span></div></div>
     <div><div class="muted">勝率</div><div style="font-size:1.6rem;font-weight:700">${games.length ? Math.round(w / games.length * 100) + "%" : "—"}</div><div class="muted">直近20戦 ${recent.length ? Math.round(rw / recent.length * 100) + "%" : "—"}</div></div>
     <div><div class="muted">直近の流れ（右が最新）</div><div class="streak">${recent.map(g => `<span class="${g.result === "W" ? "w" : "l"}" title="${esc(g.date)} vs ${esc(charById(g.opp).name)}"></span>`).join("")}</div>
-      <div class="muted">${streak ? `${streak}連${streakType === "W" ? "勝" : "敗"}中` : ""}</div></div>`;
+      <div class="muted">${streak ? `${streak}連${streakType === "W" ? "勝" : "敗"}中` : ""}</div></div>`
+    + renderRpStats(games);
 
   // 原因集計（負け試合のみでなく、原因タグが付いた全試合）
   const cc = {};
@@ -318,6 +385,21 @@ function renderAnalysis() {
     <div class="bar-row"><span>${esc(charById(o.id).name)}</span><div class="bar"><div style="width:${o.rate * 100}%;background:${o.rate >= .5 ? "var(--win)" : "var(--lose)"}"></div></div><span class="n">${Math.round(o.rate * 100)}%<br><small>${o.n}戦</small></span></div>`).join("")
     + `<p class="muted" style="margin-top:8px">勝率の低い順。苦手キャラから対策メモを埋めよう。</p>`
     : "<p class='muted'>記録がまだありません</p>";
+}
+
+// Puddle Farm 由来のセットがあれば、RP の推移・格上/格下の勝率を出す
+function renderRpStats(games) {
+  const pf = games.filter(g => g.source === "puddle" && g.rating);
+  if (!pf.length) return "";
+  const up = pf.filter(g => g.oppRating > g.rating + 1000), down = pf.filter(g => g.oppRating < g.rating - 1000), even = pf.filter(g => !up.includes(g) && !down.includes(g));
+  const wr = arr => arr.length ? Math.round(arr.filter(g => g.result === "W").length / arr.length * 100) + "%" : "—";
+  const net = pf.reduce((n, g) => n + (g.change || 0), 0);
+  const first = pf[0], last = pf[pf.length - 1];
+  return `
+    <div><div class="muted">RP（Puddle Farm）</div><div style="font-size:1.6rem;font-weight:700">${last.rating.toLocaleString()}</div>
+      <div class="muted">${first.rating.toLocaleString()} → 期間内 ${net >= 0 ? "+" : ""}${net}</div></div>
+    <div><div class="muted">相手のRP差で見た勝率</div>
+      <div class="kv" style="font-size:.88rem"><dt>格上（+1000〜）</dt><dd>${wr(up)}（${up.length}戦）</dd><dt>同格</dt><dd>${wr(even)}（${even.length}戦）</dd><dt>格下（−1000〜）</dt><dd>${wr(down)}（${down.length}戦）</dd></div></div>`;
 }
 
 // ---- 一覧タブ ----
@@ -351,7 +433,7 @@ function renderCustom() {
     ? state.custom.map(c => `<span class="tag">${esc(c.name)} <button data-del="${esc(c.id)}" style="padding:0 4px;border:none;background:none;color:inherit">×</button></span>`).join("")
     : "<span class='muted'>追加したキャラはありません</span>";
   $("dlUrl").textContent = DL_URL;
-  renderFramesStatus();
+  renderFramesStatus(); renderPuddleStatus();
 }
 
 // ---- タブ ----
@@ -452,6 +534,24 @@ $("logBody").addEventListener("click", e => {
 
 // 分析
 $("anaScope").addEventListener("change", renderAnalysis);
+$("anaSource").addEventListener("change", renderAnalysis);
+
+// Puddle Farm
+$("importPuddleFile").addEventListener("change", async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try { const res = importPuddle(await f.text()); save(); renderPuddleStatus(); notify("puddleMsg", `${res.added} セットを追加（合計 ${res.total}）` + (res.unknown.length ? ` ／ 未対応の略号：${res.unknown.join(", ")}` : ""), 8000); }
+  catch (err) { notify("puddleMsg", err.message, 8000); }
+  e.target.value = "";
+});
+$("importPuddleText").addEventListener("click", () => {
+  try { const res = importPuddle($("puddleText").value); save(); renderPuddleStatus(); $("puddleText").value = ""; notify("puddleMsg", `${res.added} セットを追加（合計 ${res.total}）` + (res.unknown.length ? ` ／ 未対応の略号：${res.unknown.join(", ")}` : ""), 8000); }
+  catch (err) { notify("puddleMsg", err.message, 8000); }
+});
+$("clearPuddle").addEventListener("click", e => { if (!armed(e.target)) return; state.puddle = []; state.puddleMeta = {}; save(); renderPuddleStatus(); });
+// 初回起動時に同梱サンプル（自分の履歴）を読み込む
+if (!(state.puddle || []).length && typeof PUDDLE_SEED !== "undefined" && PUDDLE_SEED.length) {
+  try { importPuddle(JSON.stringify(PUDDLE_SEED)); save(); } catch (_) {}
+}
 
 // 一覧
 document.querySelector("#tab-list thead").addEventListener("click", e => {
@@ -518,7 +618,7 @@ $("customList").addEventListener("click", e => {
 });
 $("resetBtn").addEventListener("click", e => {
   if (!armed(e.target, "本当に削除する（もう一度押す）")) return;
-  state.pairs = {}; state.log = []; save(); renderAll();
+  state.pairs = {}; state.log = []; state.puddle = []; state.puddleMeta = {}; save(); renderAll();
 });
 
 load();

@@ -8,7 +8,7 @@ root = pathlib.Path(__file__).parent
 html = (root / "index.html").read_text(encoding="utf-8")
 css = (root / "style.css").read_text(encoding="utf-8")
 scripts = "\n".join((root / f).read_text(encoding="utf-8")
-                    for f in ["data/characters.js", "data/aba.js", "data/drills.js", "data/frames.js", "app.js"])
+                    for f in ["data/characters.js", "data/aba.js", "data/drills.js", "data/frames.js", "data/puddle-seed.js", "app.js"])
 
 title = re.search(r"<title>(.*?)</title>", html).group(1)
 fonts = re.search(r'<link rel="stylesheet" href="https://fonts\.googleapis\.com[^>]*>', html).group(0)
