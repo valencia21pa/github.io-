@@ -42,19 +42,22 @@ def main():
     # "Asuka R#" / "Asuka R", "Bedman?" / "Bedman" のような表記揺れを吸収する
     key = lambda s: re.sub(r"[^a-z0-9]", "", s.lower())
     by_en = {key(en): cid for cid, en in re.findall(r'id: "([^"]+)", en: "([^"]+)"', chars)}
-    # 既に埋め込み済みのデータは残し、同じキャラは上書き（ページごとの取り込みに対応）
+    # 既に埋め込み済みのデータは残す（ページごとの取り込みに対応）
     fr0 = (ROOT / "data/frames.js").read_text(encoding="utf-8")
     m0 = re.search(r"const FRAME_DATA = (\{\}|\{.*?\n\});", fr0, re.S)
     out = json.loads(m0.group(1)) if m0 else {}
-    for cid in {by_en.get(key(strip(r.get("chara")))) for r in rows} - {None}:
-        out[cid] = []
+    # 同じ技（name+input）は上書き、無いものは追加。ページ境界でキャラが分断されても欠けない
     unknown = set()
     for r in rows:
         cid = by_en.get(key(strip(r.get("chara"))))
         if not cid:
             unknown.add(strip(r.get("chara"))); continue
-        out.setdefault(cid, []).append({k: strip(r.get(k)) for k in
-            ["name", "input", "startup", "active", "recovery", "onBlock", "onHit", "guard", "level"]})
+        mv = {k: strip(r.get(k)) for k in
+              ["name", "input", "startup", "active", "recovery", "onBlock", "onHit", "guard", "level"]}
+        lst = out.setdefault(cid, [])
+        i = next((i for i, m in enumerate(lst) if (m["name"], m["input"]) == (mv["name"], mv["input"])), None)
+        if i is None: lst.append(mv)
+        else: lst[i] = mv
     body = json.dumps(out, ensure_ascii=False, indent=1)
     fr = re.sub(r"const FRAME_DATA = (\{\}|\{.*?\n\});",
                 lambda _: "const FRAME_DATA = " + body + ";", fr0, count=1, flags=re.S)
