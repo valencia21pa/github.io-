@@ -2,7 +2,7 @@
 """index.html + style.css + data/*.js + app.js を 1 ファイルにまとめる。
 claude.ai のアーティファクト用（doctype/head/body なしの断片）と、
 単体配布用の完全な HTML（--full）の両方を出せる。"""
-import re, sys, pathlib
+import re, sys, pathlib, base64
 
 root = pathlib.Path(__file__).parent
 html = (root / "index.html").read_text(encoding="utf-8")
@@ -14,6 +14,10 @@ title = re.search(r"<title>(.*?)</title>", html).group(1)
 fonts = re.search(r'<link rel="stylesheet" href="https://fonts\.googleapis\.com[^>]*>', html).group(0)
 body = re.search(r"<body>(.*)</body>", html, re.S).group(1)
 body = re.sub(r'<script src="[^"]*"></script>\s*', "", body)
+# ヒーロー画像をインライン化（アーティファクトは外部画像を読めない）
+hero = root / ("assets/hero-small.jpg" if "--small-hero" in sys.argv else "assets/hero.jpg")
+if hero.exists():
+    body = body.replace('src="assets/hero.jpg"', 'src="data:image/jpeg;base64,' + base64.b64encode(hero.read_bytes()).decode() + '"')
 
 head = f"<title>{title}</title>\n{fonts}\n<style>\n{css}</style>\n"
 tail = f"<script>\n{scripts}\n</script>\n"
