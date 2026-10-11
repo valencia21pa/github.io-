@@ -160,6 +160,7 @@ footer { color: var(--muted); font-size: .8rem; padding: 24px 0 40px; border-top
     <button role="tab" data-tab="devices" aria-selected="true">便利装置</button>
     <button role="tab" data-tab="circuits" aria-selected="false">回路</button>
     <button role="tab" data-tab="building" aria-selected="false">建築のコツ</button>
+    <button role="tab" data-tab="maps" aria-selected="false">おすすめマップ</button>
     <button role="tab" data-tab="planner" aria-selected="false">設計ツール</button>
   </div>
 </nav>
@@ -435,6 +436,98 @@ footer { color: var(--muted); font-size: .8rem; padding: 24px 0 40px; border-top
         <li>1つの大きな箱より、大小の箱を組み合わせる</li>
         <li>壁の素材を高さで変える（下は石、上は木）</li>
         <li>円柱や塔は円ジェネレーターで正確に（設計ツールにあり）</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ================= マップ ================= -->
+<section class="panel" id="maps" hidden>
+  <h2>おすすめマップと地図の使い方</h2>
+  <p class="lead">配布マップの選び方と定番作品、いいシードの探し方、ゲーム内の「地図」アイテムの活用法をまとめました。</p>
+
+  <div class="cards">
+    <div class="card wide">
+      <h3>配布マップのジャンル</h3>
+      <div class="table-scroll">
+      <table>
+        <tr><th>ジャンル</th><th>どんな遊び？</th><th>向いている人</th></tr>
+        <tr><td>アドベンチャー</td><td>ストーリーに沿って進む。謎解きや戦闘あり</td><td>物語を楽しみたい人</td></tr>
+        <tr><td>アスレチック（パルクール）</td><td>ジャンプでコースを進む</td><td>操作に自信がある人、練習したい人</td></tr>
+        <tr><td>パズル・謎解き</td><td>仕掛けを解いて先へ。「ボタンを探せ」系も</td><td>考えるのが好きな人</td></tr>
+        <tr><td>サバイバル系（スカイブロックなど）</td><td>限られた資源から生き延びる</td><td>いつものサバイバルに飽きた人</td></tr>
+        <tr><td>CTM（羊毛集め）</td><td>危険なダンジョンを攻略して羊毛ブロックを集める</td><td>戦闘・探索好きの上級者</td></tr>
+        <tr><td>ミニゲーム・PvP</td><td>友達と対戦・協力</td><td>マルチプレイで遊ぶ人</td></tr>
+      </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3><span class="tag easy">定番</span>SkyBlock（スカイブロック）</h3>
+      <p>空に浮かぶ小さな島と木1本、チェスト1つからスタート。丸石製造機を作り、島を広げていく。サバイバルの基本が全部つまった名作。</p>
+      <p class="note">このページの「便利装置」「回路」の知識がそのまま役立ちます。</p>
+    </div>
+    <div class="card">
+      <h3><span class="tag easy">定番</span>The Dropper（ザ・ドロッパー）</h3>
+      <p>高い所から飛び降り、障害物をよけて水に着地するマップ。ルールがかんたんで、初心者や友達と遊ぶのにぴったり。</p>
+    </div>
+    <div class="card">
+      <h3><span class="tag mid">人気</span>Diversity（ダイバーシティ）シリーズ</h3>
+      <p>アドベンチャー、パルクール、パズル、アリーナなど、いろいろなジャンルを1つのマップで遊べる。協力プレイ向け。</p>
+    </div>
+    <div class="card">
+      <h3><span class="tag mid">人気</span>Herobrine's Mansion</h3>
+      <p>屋敷を進んでボスを倒すアクションアドベンチャー。RPGっぽい遊びがしたい人に。</p>
+    </div>
+    <div class="card">
+      <h3><span class="tag mid">上級</span>Vechs の CTM（Super Hostile など）</h3>
+      <p>CTMジャンルの元祖的な作品群。敵の多いダンジョンを攻略して羊毛を集める。難しいけど達成感が大きい。</p>
+    </div>
+    <div class="card">
+      <h3><span class="tag easy">かんたん</span>ボタンを探せ・脱出系</h3>
+      <p>部屋の中に隠されたボタンを探す、閉じ込められた部屋から脱出する。短時間で1マップ遊べる。</p>
+    </div>
+
+    <div class="card wide">
+      <h3>配布マップの入れ方と注意</h3>
+      <ul>
+        <li><strong>統合版（スイッチ・スマホ・PS など）</strong>：ゲーム内の<strong>マーケットプレイス</strong>から入手するのが安全でかんたん。無料マップもある</li>
+        <li><strong>Java版</strong>：配布ファイル（zip）を解凍し、<code>.minecraft/saves</code> フォルダに入れるとワールド一覧に出てくる</li>
+        <li>マップには<strong>対応バージョン</strong>がある。説明をよく読み、違うバージョンで開くと仕掛けが動かないことがある</li>
+        <li>配布元は Planet Minecraft、CurseForge、作者の公式ページなど、有名なサイトから。<strong>.exe などの実行ファイルは開かない</strong></li>
+        <li>アドベンチャーマップは「アドベンチャーモード」で遊ぶ前提のものが多い。ルール説明の看板を最初に読もう</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3>いいシード（ワールド）の探し方</h3>
+      <ul>
+        <li><strong>Chunkbase</strong> にシード値とバージョンを入れると、村・要塞・古代都市・バイオームの位置が地図で見られる</li>
+        <li>スポーン地点の近くに村があるシードは序盤がラク</li>
+        <li>建築したいなら「平原・サクラの林・海沿い」が広くて使いやすい</li>
+        <li>シードの地形は<strong>バージョンごとに変わる</strong>。紹介記事のバージョンと自分のバージョンが同じか確認</li>
+      </ul>
+      <p class="note">シード値はワールド作成画面の「シード値」欄に入力。Java版は <code>/seed</code> で今のワールドのシード値を確認できます。</p>
+    </div>
+
+    <div class="card">
+      <h3>ゲーム内の「地図」アイテム活用</h3>
+      <ul>
+        <li><strong>作り方</strong>：紙8枚＋コンパスで地図（統合版は紙だけの「空の地図」も）</li>
+        <li><strong>拡大</strong>：製図台で地図＋紙。最大4段階まで広い範囲を表示</li>
+        <li><strong>コピー</strong>：製図台で地図＋空の地図。仲間と共有できる</li>
+        <li><strong>ロック</strong>：製図台で地図＋ガラス板。その時点の地形を固定</li>
+        <li><strong>マップアート・地図の壁</strong>：額縁に地図を並べると、拠点の大きな地図になる</li>
+        <li><strong>目印</strong>：旗（バナー）を右クリックすると地図にマークがつく（Java版）</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3>探検家の地図（宝の地図）</h3>
+      <ul>
+        <li><strong>製図家</strong>の村人と交易すると、森の洋館・海底神殿などの地図が買える</li>
+        <li>難破船や海底遺跡のチェストに<strong>宝の地図</strong>。✕印の場所を掘ると埋もれた宝（海洋の心）</li>
+        <li>宝は✕の真下ではなく少しずれることもある。周りも掘ってみよう</li>
       </ul>
     </div>
   </div>
@@ -1138,7 +1231,7 @@ syncSizeInputs();
 selectBlock(cur);
 window.addEventListener("resize", () => { if (!document.getElementById("planner").hidden) { layoutGrid(); drawGrid(); } });
 const startTab = store.get("mc-tab");
-showTab(["devices", "circuits", "building", "planner"].includes(startTab) ? startTab : "devices");
+showTab(["devices", "circuits", "building", "maps", "planner"].includes(startTab) ? startTab : "devices");
 })();
 </script>
 </body>
