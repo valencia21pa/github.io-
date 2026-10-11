@@ -25,3 +25,9 @@ Guilty Gear -Strive- の相手キャラ別対策をまとめ、自分用メモ�
 - `data/frames.js` … 警戒技リストとフレームデータ（初期は空）
 
 データはブラウザの localStorage に保存されます。攻略メモは一般的な目安です。正確な数値は Dustloop 等で確認してください。
+
+## Dustloop から一括取得（ネットワーク許可がある環境で）
+```
+python3 scripts/fetch-dustloop.py      # 全キャラ取得 → data/frames.js に埋め込み
+python3 build-artifact.py --full out.html
+```
