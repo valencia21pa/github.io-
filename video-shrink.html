@@ -36,7 +36,7 @@ main { max-width: 960px; margin: 0 auto; padding-block: 16px; padding-inline: 16
 .card h2 { margin: 0 0 8px; font-family: var(--font-display); font-size: 1.1rem; }
 .drop { border: 2px dashed var(--line); border-radius: 12px; padding: 28px 16px; text-align: center; cursor: pointer; background: var(--panel-2); }
 .drop.over { border-color: var(--accent); background: var(--accent-soft); }
-.drop input { display: none; }
+.drop input[type=file] { font: inherit; max-width: 100%; }
 .muted { color: var(--muted); font-size: .85rem; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
 .grid > * { min-width: 0; }
@@ -71,11 +71,14 @@ video, canvas { max-width: 100%; border-radius: 8px; background: #000; }
 
 <main>
   <section class="card">
-    <label class="drop" id="drop">
-      <input type="file" id="file" accept="video/*">
-      <div><b>動画ファイルをここにドロップ</b>、またはクリックして選択</div>
-      <div class="muted">mp4 / webm / mov など。1〜3ラウンド分の切り出しを推奨</div>
-    </label>
+    <div class="drop" id="drop">
+      <div><b>動画ファイルをここにドロップ</b>、または下から選択</div>
+      <div class="row" style="justify-content:center;margin-top:10px">
+        <button class="primary" id="pick" type="button">ファイルを選ぶ</button>
+        <input type="file" id="file" accept="video/mp4,video/webm,video/quicktime,video/*">
+      </div>
+      <div class="muted" style="margin-top:8px">mp4 / webm / mov など。1〜3ラウンド分の切り出しを推奨</div>
+    </div>
     <div id="info" class="stat" style="margin-top:10px" hidden></div>
   </section>
 
@@ -180,6 +183,9 @@ video, canvas { max-width: 100%; border-radius: 8px; background: #000; }
   drop.addEventListener("dragleave", () => drop.classList.remove("over"));
   drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); if (e.dataTransfer.files[0]) load(e.dataTransfer.files[0]); });
   $("file").addEventListener("change", e => { if (e.target.files[0]) load(e.target.files[0]); });
+  $("pick").addEventListener("click", () => $("file").click());
+  // ドロップ領域の余白クリックでも選択ダイアログを開く（ボタンや input 自体のクリックは除く）
+  drop.addEventListener("click", e => { if (e.target === drop || e.target.tagName === "DIV" || e.target.tagName === "B") $("file").click(); });
 
   function load(f) {
     file = f; outBlob = null; $("result").hidden = true;
