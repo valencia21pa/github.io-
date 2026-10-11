@@ -31,3 +31,6 @@ Guilty Gear -Strive- の相手キャラ別対策をまとめ、自分用メモ�
 python3 scripts/fetch-dustloop.py      # 全キャラ取得 → data/frames.js に埋め込み
 python3 build-artifact.py --full out.html
 ```
+
+## 動画シュリンク（`video-shrink.html`）
+対戦リプレイの録画をブラウザ内で軽くする単体ページ。解像度・fps・ビットレート・切り出し範囲を指定して、Canvas + MediaRecorder で再エンコードします（実時間処理、送信なし）。
