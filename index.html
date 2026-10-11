@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GGST キャラ対策ノート</title>
+<style>
+  :root {
+    --bg: #f4f2ee;
+    --panel: #ffffff;
+    --text: #1d1b19;
+    --muted: #6b6560;
+    --line: #ddd8d0;
+    --accent: #c8102e;
+    --accent-soft: #fbe3e6;
+    --win: #1f7a4d;
+    --lose: #b3261e;
+    --chip: #efebe5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141312;
+      --panel: #1e1c1a;
+      --text: #ece8e2;
+      --muted: #9d968e;
+      --line: #34302c;
+      --accent: #ff4d5e;
+      --accent-soft: #3a1d21;
+      --win: #4cc38a;
+      --lose: #ff7a70;
+      --chip: #2a2724;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", sans-serif;
+    line-height: 1.6;
+  }
+  header {
+    padding: 16px;
+    border-bottom: 3px solid var(--accent);
+    background: var(--panel);
+  }
+  header h1 { margin: 0; font-size: 1.3rem; letter-spacing: .02em; }
+  header p { margin: 4px 0 0; color: var(--muted); font-size: .85rem; }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
+  label.field { display: flex; flex-direction: column; gap: 4px; font-size: .8rem; color: var(--muted); flex: 1 1 200px; }
+  select, input[type=text], input[type=search], textarea {
+    font: inherit; color: var(--text); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; width: 100%;
+  }
+  textarea { min-height: 84px; resize: vertical; }
+  button {
+    font: inherit; cursor: pointer; border-radius: 8px; padding: 8px 14px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--text);
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:hover { filter: brightness(1.05); }
+  .tabs { display: flex; gap: 6px; margin: 16px 0 12px; }
+  .tabs button[aria-selected=true] { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+  .card h2 { margin: 0 0 8px; font-size: 1.1rem; }
+  .card h3 { margin: 12px 0 6px; font-size: .95rem; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+  .tag { background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 2px 10px; font-size: .78rem; font-weight: 600; }
+  ul.tips { margin: 0; padding-left: 1.2em; }
+  ul.tips li { margin: 2px 0; }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+  .note-field span { display: block; font-size: .85rem; font-weight: 600; margin-bottom: 4px; }
+  .stars { display: inline-flex; gap: 2px; }
+  .stars button { border: none; background: none; padding: 0 2px; font-size: 1.4rem; color: var(--line); }
+  .stars button.on { color: #e0a100; }
+  .record { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .record .num { font-size: 1.3rem; font-weight: 700; min-width: 2ch; text-align: center; }
+  .win { color: var(--win); } .lose { color: var(--lose); }
+  .muted { color: var(--muted); font-size: .85rem; }
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: .8rem; cursor: pointer; user-select: none; }
+  tr.clickable { cursor: pointer; }
+  tr.clickable:hover td { background: var(--chip); }
+  .table-wrap { overflow-x: auto; }
+  .saved { font-size: .8rem; color: var(--win); opacity: 0; transition: opacity .3s; }
+  .saved.show { opacity: 1; }
+  .system li { margin: 4px 0; }
+  .hidden { display: none !important; }
+  footer { text-align: center; color: var(--muted); font-size: .78rem; padding: 24px 16px; }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+<header>
+  <h1>GGST キャラ対策ノート</h1>
+  <p>Guilty Gear -Strive- の相手キャラ別対策をまとめて、自分用メモと戦績を記録するツール</p>
+</header>
+
+<main>
+  <div class="row">
+    <label class="field">自キャラ
+      <select id="mine"></select>
+    </label>
+    <label class="field">相手キャラ
+      <select id="opp"></select>
+    </label>
+    <button id="swap" title="入れ替え">⇄ 入れ替え</button>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" data-tab="matchup" aria-selected="true">対策</button>
+    <button role="tab" data-tab="list" aria-selected="false">一覧</button>
+    <button role="tab" data-tab="system" aria-selected="false">共通知識</button>
+    <button role="tab" data-tab="data" aria-selected="false">データ管理</button>
+  </div>
+
+  <!-- 対策タブ -->
+  <section id="tab-matchup">
+    <div class="card" id="oppInfo"></div>
+
+    <div class="card">
+      <div class="row" style="justify-content: space-between; align-items: center;">
+        <h2 id="pairTitle" style="margin:0"></h2>
+        <span class="saved" id="savedMark">保存しました</span>
+      </div>
+
+      <div class="grid2" style="margin-top:12px">
+        <div>
+          <div class="note-field"><span>体感難易度</span></div>
+          <div class="stars" id="stars"></div>
+          <div class="muted">★1 = 有利 / ★5 = きつい</div>
+        </div>
+        <div>
+          <div class="note-field"><span>戦績</span></div>
+          <div class="record">
+            <span class="win">勝</span><span class="num win" id="wins">0</span>
+            <button data-rec="wins" data-d="1">＋</button><button data-rec="wins" data-d="-1">−</button>
+            <span class="lose" style="margin-left:8px">負</span><span class="num lose" id="losses">0</span>
+            <button data-rec="losses" data-d="1">＋</button><button data-rec="losses" data-d="-1">−</button>
+            <span class="muted" id="rate"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid2" style="margin-top:12px" id="noteFields"></div>
+    </div>
+  </section>
+
+  <!-- 一覧タブ -->
+  <section id="tab-list" class="hidden">
+    <div class="card">
+      <h2 id="listTitle"></h2>
+      <p class="muted">行をクリックするとその対策ページへ移動します。見出しクリックで並び替え。</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th data-sort="name">相手</th>
+            <th data-sort="diff">難易度</th>
+            <th data-sort="games">試合数</th>
+            <th data-sort="rate">勝率</th>
+            <th>メモ（立ち回り）</th>
+          </tr></thead>
+          <tbody id="listBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 共通知識タブ -->
+  <section id="tab-system" class="hidden">
+    <div class="card system">
+      <h2>どのキャラ対でも使える基本</h2>
+      <ul>
+        <li><b>確定反撃を調べる習慣</b>：トレモで相手の技をガードさせ、自分の最速技（多くは近S・2K・6P等）が入るかを確認してメモ欄に残す。</li>
+        <li><b>フォルトレスディフェンス（FD）</b>：ガード中に2ボタン押しで相手を押し返す。固めから抜けられない時に距離を離す。</li>
+        <li><b>サイクバースト</b>：ゲージ満タン時、被コンボ中の割り込みに。相手の起き攻め前に吐くより、確実に大ダメージを防げる場面で。</li>
+        <li><b>デッドアングルアタック（DAA）</b>：ガード中に6+2ボタン。テンション50%で連携を割れる。読まれると確反なので乱用注意。</li>
+        <li><b>ロマンキャンセル（RC）</b>：赤RCで隙消し、青RCで隙消し＋スロー、紫RCで技の出始めをキャンセル、黄RCはガード中に出して切り返し。</li>
+        <li><b>ワンダリング・ステップ（壁際）</b>：壁割れ後の有利状況はポジティブボーナスで火力が伸びる。壁際で耐えるより、壁を割られる前の脱出を意識。</li>
+        <li><b>投げ抜け</b>：ストライヴの投げは発生が早くリーチが短い。密着の有利フレーム後は投げも混ぜられていると考え、ジャンプ・バクステ・切り返しも選択肢に。</li>
+        <li><b>相手のキャラ特性を一言で覚える</b>：「飛び道具」「コマ投げ」「当て身」「スタンス」など、何を警戒すべきかを最初に決めると立ち回りがぶれにくい。</li>
+      </ul>
+      <p class="muted">フレームデータの正確な数値は <a href="https://www.dustloop.com/w/GGST" target="_blank" rel="noopener">Dustloop Wiki</a> や公式のトレーニングモードで確認してください。バランス調整で変わることがあります。</p>
+    </div>
+  </section>
+
+  <!-- データ管理タブ -->
+  <section id="tab-data" class="hidden">
+    <div class="card">
+      <h2>バックアップ</h2>
+      <p class="muted">メモと戦績はこのブラウザ内に保存されます。別端末へ移す時やバックアップにはJSONを書き出してください。</p>
+      <div class="row">
+        <button class="primary" id="exportBtn">JSONを書き出し</button>
+        <label class="field" style="flex:0 1 auto">JSONを読み込み
+          <input type="file" id="importFile" accept="application/json,.json">
+        </label>
+      </div>
+    </div>
+    <div class="card">
+      <h2>キャラを追加</h2>
+      <p class="muted">新キャラ・DLCキャラが一覧にない時に追加できます。</p>
+      <div class="row">
+        <label class="field">キャラ名<input type="text" id="newName" placeholder="例：新キャラ"></label>
+        <label class="field">タイプ（カンマ区切り）<input type="text" id="newTags" placeholder="例：ラッシュ, 飛び道具"></label>
+        <button class="primary" id="addChar">追加</button>
+      </div>
+      <div id="customList" class="tags" style="margin-top:10px"></div>
+    </div>
+    <div class="card">
+      <h2>リセット</h2>
+      <button id="resetBtn">すべてのメモと戦績を削除</button>
+    </div>
+  </section>
+</main>
+
+<footer>
+  非公式のファンツールです。Guilty Gear -Strive- は株式会社アークシステムワークスの作品です。<br>
+  掲載している特徴・攻略メモは一般的な目安です。正確な数値は <a href="https://www.dustloop.com/w/GGST" target="_blank" rel="noopener">Dustloop</a> 等で確認してください。
+</footer>
+
+<script>
+// 各キャラの特徴と、相手にした時の一般的な対策ポイント
+const BASE_CHARS = [
+  { id: "sol", name: "ソル", tags: ["ラッシュ", "高火力"], tips: [
+    "ガンフレイムの後に追いかけてくる展開が多い。飛び道具を見てから飛ばず、ガードで様子見も混ぜる",
+    "ヴォルカニックヴァイパー（無敵昇竜）は外すと大きな隙。暴れを読んだらガードして確反",
+    "ナイトレイドヴォルテックスやぶっきらぼうに投げる等、起き攻めの択に注意" ] },
+  { id: "ky", name: "カイ", tags: ["スタンダード", "飛び道具"], tips: [
+    "スタンエッジで遠距離を制してくる。弾を見たら前ダッシュ・ジャンプで距離を詰める練習を",
+    "ヴェイパースラスト（無敵昇竜）があるので、雑な固め継続は危険",
+    "ドラゴンインストール中は性能が上がる。体力が少ない時の起動に警戒" ] },
+  { id: "may", name: "メイ", tags: ["溜めキャラ", "ラッシュ"], tips: [
+    "イルカさん（溜め技）がメインの崩し・突進手段。溜めを作らせない攻めが有効",
+    "イルカさん横はガード後に反撃できる場面が多いのでトレモで確認",
+    "オーバーヘッド・キッス（コマ投げ）を持つので、密着でのガード固めすぎに注意" ] },
+  { id: "axl", name: "アクセル", tags: ["遠距離", "牽制"], tips: [
+    "リーチの長い通常技と鎌閃撃で遠距離を支配する。距離を詰めて張り付けば有利",
+    "近づいた後は相手の切り返し手段が限られるので、しっかり攻め継続",
+    "空中からの攻めが通りやすいが、対空技に注意" ] },
+  { id: "chipp", name: "チップ", tags: ["スピード", "低体力"], tips: [
+    "体力が非常に低いので一度の確反やコンボで大きく有利に",
+    "壁張り付きや高速の表裏・中下段に注意。落ち着いてガードを固める",
+    "αブレードなどの突進技はガード後の反撃を確認しておく" ] },
+  { id: "potemkin", name: "ポチョムキン", tags: ["投げキャラ", "高体力"], tips: [
+    "ポチョムキンバスター（コマ投げ）が最大の脅威。密着での様子見ガードは危険、ジャンプ・バクステを混ぜる",
+    "ハンマーフォールで距離を詰めてくる。止める技・確反をトレモで確認",
+    "動きが遅いので、遠距離から削って相手に動かせる立ち回りが基本" ] },
+  { id: "faust", name: "ファウスト", tags: ["トリッキー", "アイテム"], tips: [
+    "何が出るかな？で投げるアイテムを見て対処を変える（爆弾・アフロなど）",
+    "長い通常技を持つので中距離は相手の土俵になりやすい",
+    "攻めは独特な軌道が多い。焦らずガードで見てから対応" ] },
+  { id: "millia", name: "ミリア", tags: ["ラッシュ", "起き攻め"], tips: [
+    "タンデムトップ等の設置を絡めた起き攻めが強力。起き上がりの暴れは慎重に",
+    "空中の機動力が高く表裏が分かりにくい。ガード方向の練習が必要",
+    "体力は低めなので、一度捕まえたら大きく取り返せる" ] },
+  { id: "zato", name: "ザトー=ONE", tags: ["設置", "人形"], tips: [
+    "エディ（影）を使った挟み込みの連携が強力。エディが出ている時は本体を攻めるのが基本",
+    "本体を攻めてエディを消させる・ゲージを枯らすのが対策の軸",
+    "影からの攻撃の発生位置を把握しておく" ] },
+  { id: "ramlethal", name: "ラムレザル", tags: ["中距離", "高火力"], tips: [
+    "剣を飛ばす・持つで性能が変わる。剣の有無を常に確認",
+    "中距離の通常技が強い。リーチ外か密着で戦う意識",
+    "壁際の火力が高いので、端を背負わないように" ] },
+  { id: "leo", name: "レオ", tags: ["溜めキャラ", "スタンス"], tips: [
+    "背向け（ブリュンヒルドの構え）からの択が多彩。構えを見たら判断を早く",
+    "溜め技主体なので、溜めを解除させるような攻めが有効",
+    "飛び道具グラヴィエットヴァーベルで距離を取られた時の詰め方を練習" ] },
+  { id: "nagoriyuki", name: "名残雪", tags: ["リーチ", "ゲージ管理"], tips: [
+    "空中ダッシュがないので、接近手段が限られる。リーチ外からの読み合いが重要",
+    "血ゲージが溜まりすぎると血吸い状態（ブラッドレイジ）で体力が減る。必殺技を使わせて自滅を誘う",
+    "通常技の発生は遅め。懐に入れば有利な場面が多い" ] },
+  { id: "giovanna", name: "ジオヴァーナ", tags: ["ラッシュ", "スピード"], tips: [
+    "高速ダッシュと中下段で攻めてくる。ガード後の有利・不利を把握",
+    "単発の突進技が多いので、ガード後の確反チェックが重要",
+    "リーチは短めなので、牽制で近寄らせない立ち回りも有効" ] },
+  { id: "anji", name: "御津闇慈", tags: ["当て身", "スタンス"], tips: [
+    "当て身（臨・紅）を持つ。読まれる攻撃は控え、投げを混ぜる",
+    "風神からの派生択が多い。派生ごとの対処をトレモで確認",
+    "ガード後の確反がある技が多いので、反撃を逃さない" ] },
+  { id: "ino", name: "イノ", tags: ["空中", "高速"], tips: [
+    "低空ダッシュ（ホバーダッシュ）の中段・下段崩しが強力",
+    "空中の機動力に惑わされず、対空の準備を",
+    "ケミカル愛情など移動技の後隙を狙う" ] },
+  { id: "goldlewis", name: "ゴールドルイス", tags: ["パワー", "高体力"], tips: [
+    "ビヒーモスタイフーンは方向で軌道が変わる。ガード方向に注意",
+    "技の発生が遅めで隙も大きい。ガード後の確反を確実に取る",
+    "近づくと強いが、立ち回りで当てさせない動きが有効" ] },
+  { id: "jacko", name: "ジャック・オー", tags: ["設置", "召喚"], tips: [
+    "サーヴァント（召喚）を出されると相手のペース。召喚前・召喚中に攻める",
+    "ハウスを設置されたら壊すかどうかの判断を早く",
+    "本体の攻めは控えめなので、積極的に前に出る" ] },
+  { id: "chaos", name: "ハッピーケイオス", tags: ["射撃", "トリッキー"], tips: [
+    "銃撃は構えからの派生。構えを見たら距離を詰めるかガード",
+    "弾数・集中ゲージを使い切った時がチャンス",
+    "体力は低め。接近して攻め続けるのが基本" ] },
+  { id: "baiken", name: "梅喧", tags: ["当て身", "カウンター"], tips: [
+    "畳返し・当て身があり、ガード中の切り返しが強力。固めは短めに",
+    "投げ・打撃を混ぜて当て身を読ませない",
+    "鉄斬扇など突進技の確反を確認しておく" ] },
+  { id: "testament", name: "テスタメント", tags: ["設置", "遠距離"], tips: [
+    "グレイヴリーパーで遠距離を制される。弾の隙に距離を詰める",
+    "ステインの付与で連携が伸びる。被弾後の起き攻めに注意",
+    "接近されると苦しいキャラ。張り付きを意識" ] },
+  { id: "bridget", name: "ブリジット", tags: ["設置", "ヨーヨー"], tips: [
+    "ヨーヨーを設置して挟み込みの連携を作る。ヨーヨーの位置を常に確認",
+    "キックスタートマイハートからの派生（ストップ・突進）を見極める",
+    "設置前に攻めて自由にさせない" ] },
+  { id: "sin", name: "シン", tags: ["ラッシュ", "スタミナ"], tips: [
+    "カロリーゲージが空になると食事をして隙ができる。そこを狙う",
+    "突進技・跳び技で一気に距離を詰めてくる。突進のガード後の確反を確認",
+    "ガードを固めて攻めを止め、相手のゲージ切れを待つ戦術も有効" ] },
+  { id: "bedman", name: "ベッドマン？", tags: ["設置", "トリッキー"], tips: [
+    "デジャヴ（技の再現）で同じ技が後から再生される。設置位置に注意",
+    "独特の軌道の攻撃が多いので、見てからガードする練習を",
+    "攻撃の隙は大きめなので、ガード後の反撃を準備" ] },
+  { id: "asuka", name: "飛鳥=R♯", tags: ["ゾーナー", "魔法"], tips: [
+    "魔力ゲージとスペルの組み合わせで多彩な攻撃。手札（スペル）を見て対処を変える",
+    "近距離が比較的苦手。テレポートに注意しつつ張り付く",
+    "魔力切れのタイミングを狙う" ] },
+  { id: "johnny", name: "ジョニー", tags: ["スタンス", "居合"], tips: [
+    "ミストファイナー（構え）からの居合が強力。構えを見たら下手に動かない",
+    "構えの派生をガードした後の反撃を確認しておく",
+    "コインなどで強化された攻撃の範囲に注意" ] },
+  { id: "elphelt", name: "エルフェルト", tags: ["射撃", "ラッシュ"], tips: [
+    "ライフル・ショットガンなど銃を使った射撃。構え中の動きに注意",
+    "近距離の攻めも強い。接近戦と遠距離の両方に備える",
+    "射撃の隙を見つけて差し込む" ] },
+  { id: "aba", name: "A.B.A", tags: ["モード", "コマ投げ"], tips: [
+    "強化モード（もろはモード）中は性能が上がる。モード中は無理せず守り、終了後に攻める",
+    "コマ投げを持つので密着でのガード固めすぎに注意",
+    "モードを維持するためのゲージ管理を崩す" ] },
+  { id: "slayer", name: "スレイヤー", tags: ["パワー", "高火力"], tips: [
+    "マッパハンチ・パイルバンカーなど一撃の重い技が多い",
+    "ダンディステップからの派生を見極める",
+    "火力差が大きいので、無理な読み合いを避けて安全に" ] },
+  { id: "dizzy", name: "ディズィー", tags: ["ゾーナー", "飛び道具"], tips: [
+    "多彩な飛び道具で画面を制圧する。弾の隙間を縫って接近",
+    "近距離の切り返しが少なめなら張り付きが有効",
+    "設置物の位置を把握して突っ込まない" ] },
+  { id: "venom", name: "ヴェノム", tags: ["設置", "ボール"], tips: [
+    "ボールの設置と打ち出しで画面を支配。ボールの数・位置を常に確認",
+    "設置させる前に攻めるのが基本",
+    "ボールを使った起き攻めの連携に注意" ] },
+  { id: "unika", name: "ユニカ", tags: ["新キャラ"], tips: [
+    "技の性質はトレモで確認してメモ欄にまとめよう" ] },
+  { id: "lucy", name: "ルーシー", tags: ["ゲスト", "新キャラ"], tips: [
+    "技の性質はトレモで確認してメモ欄にまとめよう" ] },
+];
+
+const NOTE_FIELDS = [
+  { key: "neutral", label: "立ち回り", ph: "距離ごとの振る技、相手の牽制への対応など" },
+  { key: "punish",  label: "確定反撃", ph: "例：〇〇ガード後 → 近S始動" },
+  { key: "danger",  label: "警戒する技・連携", ph: "相手が多用する技、分からん殺しなど" },
+  { key: "oki",     label: "起き攻め・防御", ph: "相手の起き攻めの択、自分が通しやすい起き攻め" },
+  { key: "memo",    label: "その他メモ", ph: "ランクマで気づいたことなど" },
+];
+
+const STORE_KEY = "ggst-matchup-v1";
+let state = { mine: "sol", opp: "ky", custom: [], pairs: {} };
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) state = Object.assign(state, JSON.parse(raw));
+  } catch (e) { /* ストレージ不可の環境ではメモリのみで動作 */ }
+}
+let savedTimer;
+function save(showMark) {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+  if (showMark) {
+    const m = document.getElementById("savedMark");
+    m.classList.add("show");
+    clearTimeout(savedTimer);
+    savedTimer = setTimeout(() => m.classList.remove("show"), 1200);
+  }
+}
+
+const allChars = () => BASE_CHARS.concat(state.custom);
+const charById = id => allChars().find(c => c.id === id) || allChars()[0];
+const pairKey = () => state.mine + "__" + state.opp;
+function pairData(key = pairKey()) {
+  if (!state.pairs[key]) state.pairs[key] = { diff: 0, wins: 0, losses: 0, notes: {} };
+  return state.pairs[key];
+}
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+function fillSelects() {
+  for (const id of ["mine", "opp"]) {
+    const sel = document.getElementById(id);
+    sel.innerHTML = allChars().map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("");
+    sel.value = state[id];
+    if (sel.value !== state[id]) { state[id] = sel.value; }
+  }
+}
+
+function renderMatchup() {
+  const opp = charById(state.opp), mine = charById(state.mine);
+  document.getElementById("oppInfo").innerHTML = `
+    <h2>相手：${esc(opp.name)}</h2>
+    <div class="tags">${opp.tags.map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div>
+    <h3>対策の基本</h3>
+    <ul class="tips">${(opp.tips || []).map(t => `<li>${esc(t)}</li>`).join("") || "<li class='muted'>まだ情報がありません。下のメモ欄に書き込んでください。</li>"}</ul>`;
+  document.getElementById("pairTitle").textContent = `${mine.name} 側の ${opp.name} 対策メモ`;
+
+  const d = pairData();
+  document.getElementById("stars").innerHTML = [1, 2, 3, 4, 5]
+    .map(n => `<button data-star="${n}" class="${n <= d.diff ? "on" : ""}" aria-label="難易度${n}">★</button>`).join("");
+  document.getElementById("wins").textContent = d.wins;
+  document.getElementById("losses").textContent = d.losses;
+  const games = d.wins + d.losses;
+  document.getElementById("rate").textContent = games ? `勝率 ${Math.round(d.wins / games * 100)}%（${games}戦）` : "";
+
+  document.getElementById("noteFields").innerHTML = NOTE_FIELDS.map(f => `
+    <label class="note-field"><span>${f.label}</span>
+      <textarea data-note="${f.key}" placeholder="${esc(f.ph)}">${esc(d.notes[f.key] || "")}</textarea>
+    </label>`).join("");
+}
+
+let sortKey = "name", sortDir = 1;
+function renderList() {
+  const mine = charById(state.mine);
+  document.getElementById("listTitle").textContent = `${mine.name} の対キャラ一覧`;
+  const rows = allChars().filter(c => c.id !== state.mine).map((c, i) => {
+    const d = state.pairs[state.mine + "__" + c.id] || { diff: 0, wins: 0, losses: 0, notes: {} };
+    const games = d.wins + d.losses;
+    return { c, i, d, games, rate: games ? d.wins / games : -1 };
+  });
+  rows.sort((a, b) => {
+    const v = { name: a.i - b.i, diff: a.d.diff - b.d.diff, games: a.games - b.games, rate: a.rate - b.rate }[sortKey];
+    return v * sortDir;
+  });
+  document.getElementById("listBody").innerHTML = rows.map(r => `
+    <tr class="clickable" data-go="${esc(r.c.id)}">
+      <td>${esc(r.c.name)}</td>
+      <td>${r.d.diff ? "★".repeat(r.d.diff) : "<span class='muted'>—</span>"}</td>
+      <td>${r.games || "<span class='muted'>0</span>"}</td>
+      <td>${r.games ? Math.round(r.rate * 100) + "%" : "<span class='muted'>—</span>"}</td>
+      <td class="muted">${esc((r.d.notes.neutral || "").slice(0, 40))}</td>
+    </tr>`).join("");
+}
+
+function renderCustom() {
+  document.getElementById("customList").innerHTML = state.custom.length
+    ? state.custom.map(c => `<span class="tag">${esc(c.name)} <button data-del="${esc(c.id)}" style="padding:0 4px;border:none;background:none;color:inherit">×</button></span>`).join("")
+    : "<span class='muted'>追加したキャラはありません</span>";
+}
+
+function showTab(name) {
+  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === name));
+  for (const t of ["matchup", "list", "system", "data"]) document.getElementById("tab-" + t).classList.toggle("hidden", t !== name);
+  if (name === "list") renderList();
+  if (name === "data") renderCustom();
+}
+
+function renderAll() { fillSelects(); renderMatchup(); renderList(); renderCustom(); }
+
+// --- イベント ---
+document.getElementById("mine").addEventListener("change", e => { state.mine = e.target.value; save(); renderMatchup(); renderList(); });
+document.getElementById("opp").addEventListener("change", e => { state.opp = e.target.value; save(); renderMatchup(); });
+document.getElementById("swap").addEventListener("click", () => { [state.mine, state.opp] = [state.opp, state.mine]; save(); renderAll(); });
+document.querySelector(".tabs").addEventListener("click", e => { if (e.target.dataset.tab) showTab(e.target.dataset.tab); });
+
+document.getElementById("stars").addEventListener("click", e => {
+  const n = +e.target.dataset.star; if (!n) return;
+  const d = pairData(); d.diff = d.diff === n ? 0 : n; save(true); renderMatchup();
+});
+document.querySelector(".record").addEventListener("click", e => {
+  const k = e.target.dataset.rec; if (!k) return;
+  const d = pairData(); d[k] = Math.max(0, d[k] + +e.target.dataset.d); save(true); renderMatchup();
+});
+let typeTimer;
+document.getElementById("noteFields").addEventListener("input", e => {
+  const k = e.target.dataset.note; if (!k) return;
+  pairData().notes[k] = e.target.value;
+  clearTimeout(typeTimer); typeTimer = setTimeout(() => save(true), 400);
+});
+
+document.querySelector("#tab-list thead").addEventListener("click", e => {
+  const k = e.target.dataset.sort; if (!k) return;
+  sortDir = sortKey === k ? -sortDir : (k === "name" ? 1 : -1); sortKey = k; renderList();
+});
+document.getElementById("listBody").addEventListener("click", e => {
+  const tr = e.target.closest("tr[data-go]"); if (!tr) return;
+  state.opp = tr.dataset.go; save(); fillSelects(); renderMatchup(); showTab("matchup");
+});
+
+document.getElementById("exportBtn").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `ggst-matchup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click(); URL.revokeObjectURL(a.href);
+});
+document.getElementById("importFile").addEventListener("change", async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    if (!data || typeof data.pairs !== "object") throw new Error("形式が違います");
+    state = Object.assign({ mine: "sol", opp: "ky", custom: [], pairs: {} }, data);
+    save(); renderAll(); alert("読み込みました");
+  } catch (err) { alert("読み込みに失敗しました：" + err.message); }
+  e.target.value = "";
+});
+document.getElementById("addChar").addEventListener("click", () => {
+  const name = document.getElementById("newName").value.trim(); if (!name) return;
+  const tags = document.getElementById("newTags").value.split(/[,、]/).map(s => s.trim()).filter(Boolean);
+  state.custom.push({ id: "custom_" + Date.now(), name, tags, tips: [] });
+  document.getElementById("newName").value = ""; document.getElementById("newTags").value = "";
+  save(); renderAll();
+});
+document.getElementById("customList").addEventListener("click", e => {
+  const id = e.target.dataset.del; if (!id || !confirm("このキャラを削除しますか？")) return;
+  state.custom = state.custom.filter(c => c.id !== id);
+  save(); renderAll();
+});
+document.getElementById("resetBtn").addEventListener("click", () => {
+  if (!confirm("すべてのメモと戦績を削除します。よろしいですか？")) return;
+  state.pairs = {}; save(); renderAll();
+});
+
+load();
+renderAll();
+</script>
+</body>
+</html>
