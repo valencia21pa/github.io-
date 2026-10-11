@@ -364,7 +364,8 @@ const norm = (t) => typeof t === "string" ? { title: t } : t;
 function drillsFor(oppId, d) {
   const base = COMMON_DRILLS.map((t, i) => ({ id: "c" + i, ...norm(t) }))
     .concat((CHAR_DRILLS[oppId] || []).map((t, i) => ({ id: "k" + i, ...norm(t) })));
-  return base.concat(d.customDrills.map((t, i) => ({ id: "u" + i, title: t, custom: true })));
+  // customDrills は文字列（自分で追加）か、{title, record, action, pass, from}（動画分析から追加）
+  return base.concat(d.customDrills.map((t, i) => ({ id: "u" + i, ...norm(t), custom: true })));
 }
 function drillProgress(mine, opp) {
   const d = state.pairs[pairKeyOf(mine, opp)];
@@ -382,7 +383,7 @@ function renderDrills() {
     <li class="${d.drills[it.id] ? "done" : ""}">
       <input type="checkbox" id="dr-${it.id}" data-drill="${it.id}" ${d.drills[it.id] ? "checked" : ""}>
       <div class="drill">
-        <label for="dr-${it.id}">${esc(it.title)}</label>
+        <label for="dr-${it.id}">${esc(it.title)}${it.from ? ` <span class="tag neutral">${esc(it.from)}</span>` : ""}</label>
         ${it.record ? `<dl class="drill-steps">
           <dt>記録</dt><dd>${esc(it.record)}</dd>
           <dt>やる</dt><dd>${esc(it.action)}</dd>
