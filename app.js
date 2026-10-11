@@ -34,13 +34,74 @@ function load() {
 }
 let savedTimer;
 function save(showMark) {
+  state.updatedAt = Date.now();
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+  cloudQueue();
   if (showMark) {
     const m = document.getElementById("savedMark");
     m.classList.add("show");
     clearTimeout(savedTimer);
     savedTimer = setTimeout(() => m.classList.remove("show"), 1200);
   }
+}
+
+// ---- クラウド保存（アーティファクトの db）----
+// ブラウザ内保存（localStorage）はアプリ側の都合で消えることがあるので、
+// アーティファクト上では db にも同じ内容を保存し、起動時に新しい方を採用する
+const SYNC_KEYS = ["mine", "opp", "custom", "pairs", "log", "puddle", "puddleMeta", "updatedAt"];
+let cloudDoc = null, cloudTimer = null, cloudBusy = false, cloudDirty = false, cloudState = "off";
+function setCloud(s, msg) { cloudState = s; const el = $("cloudStatus"); if (el) { el.textContent = msg; el.className = "muted cloud " + s; } }
+function pickSync(src) { const o = {}; for (const k of SYNC_KEYS) if (src[k] !== undefined) o[k] = src[k]; return o; }
+function cloudQueue() {
+  if (!cloudDoc) return;
+  cloudDirty = true; clearTimeout(cloudTimer);
+  cloudTimer = setTimeout(cloudFlush, 1200);
+}
+async function cloudFlush() {
+  if (!cloudDoc || cloudBusy || !cloudDirty) return;
+  cloudBusy = true; cloudDirty = false;
+  try { await cloudDoc.set(pickSync(state)); setCloud("ok", "クラウド保存：同期済み " + new Date().toLocaleTimeString()); }
+  catch (e) { cloudDirty = true; setCloud("err", "クラウド保存：失敗（" + (e?.code || e?.message || e) + "）。ブラウザ内には保存されています"); }
+  cloudBusy = false;
+  if (cloudDirty) cloudQueue();
+}
+async function cloudInit() {
+  if (!window.claude?.use) { setCloud("off", "クラウド保存：この表示では使えません（ブラウザ内のみ）"); return; }
+  const db = await claude.use("db");
+  if (!db) { setCloud("off", "クラウド保存：利用不可（ブラウザ内のみ）"); return; }
+  try {
+    cloudDoc = db.doc("user/state");
+    const snap = await cloudDoc.get();
+    const remote = snap.exists ? snap.data() : null;
+    const localHas = state.log.length || Object.keys(state.pairs).length || (state.puddle || []).length;
+    if (remote && (remote.updatedAt || 0) > (state.updatedAt || 0)) {
+      // クラウドの方が新しい → 採用。ただしローカルにしかないログは失わないよう結合
+      const localLogIds = new Set((remote.log || []).map(g => g.id));
+      const extra = state.log.filter(g => !localLogIds.has(g.id));
+      Object.assign(state, pickSync(remote));
+      if (extra.length) { state.log = state.log.concat(extra).sort((x, y) => x.date.localeCompare(y.date)); }
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (_) {}
+      renderAll();
+      setCloud("ok", "クラウド保存：読み込み済み（" + state.log.length + " 件のログ）" + (extra.length ? "、ローカル分 " + extra.length + " 件を結合" : ""));
+      if (extra.length) cloudQueue();
+    } else if (localHas) {
+      cloudDirty = true; await cloudFlush();
+    } else if (remote) {
+      Object.assign(state, pickSync(remote)); renderAll(); setCloud("ok", "クラウド保存：読み込み済み");
+    } else {
+      setCloud("ok", "クラウド保存：有効（まだデータなし）");
+    }
+    // 他の端末からの更新を反映
+    cloudDoc.onSnapshot(s => {
+      if (!s.exists || s.hasPendingWrites) return;
+      const r = s.data();
+      if ((r.updatedAt || 0) > (state.updatedAt || 0) + 50) {
+        Object.assign(state, pickSync(r));
+        try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (_) {}
+        renderAll(); setCloud("ok", "クラウド保存：他の端末の更新を反映 " + new Date().toLocaleTimeString());
+      }
+    }, () => {});
+  } catch (e) { setCloud("err", "クラウド保存：接続できません（" + (e?.code || e?.message || e) + "）"); }
 }
 
 // ---- ユーティリティ ----
@@ -333,9 +394,15 @@ function renderDrills() {
 }
 
 // ---- 試合ログ ----
-let logDraft = { result: null, causes: new Set() };
+let logDraft = { result: null, causes: new Set(), editId: null };
 function renderLogForm() {
-  $("logPair").textContent = `${charById(state.mine).name} vs ${charById(state.opp).name}（上のセレクトで変更）`;
+  const ed = logDraft.editId ? state.log.find(g => g.id === logDraft.editId) : null;
+  $("logFormTitle").textContent = ed ? "記録を編集" : "試合を記録";
+  $("logPair").textContent = ed
+    ? `${charById(ed.mine).name} vs ${charById(ed.opp).name}（${ed.date} の記録を編集中）`
+    : `${charById(state.mine).name} vs ${charById(state.opp).name}（上のセレクトで変更）`;
+  $("logSave").textContent = ed ? "更新する" : "記録する";
+  $("logCancel").hidden = !ed;
   if (!$("logDate").value) $("logDate").value = today();
   document.querySelectorAll(".result-btns button").forEach(b => b.classList.toggle("on", b.dataset.res === logDraft.result));
   $("causeChips").innerHTML = CAUSES.map(c => `<button data-cause="${esc(c)}" class="${logDraft.causes.has(c) ? "on" : ""}">${esc(c)}</button>`).join("");
@@ -348,7 +415,7 @@ function renderLogTable() {
       <td class="${g.result === "W" ? "win" : "lose"}"><b>${g.result === "W" ? "勝" : "負"}</b>${g.score ? ` <small class="muted">${esc(g.score)}</small>` : ""}</td>
       <td class="causes">${g.source === "puddle" ? `<span class="muted">${esc(g.oppName)} ${g.oppRating ? g.oppRating.toLocaleString() + "RP" : ""} ${g.change != null ? (g.change >= 0 ? "+" : "") + g.change : ""}</span>` : (g.causes || []).map(esc).join("、")}</td>
       <td class="muted">${esc(g.memo || "")}</td>
-      <td>${g.source === "puddle" ? "" : `<button class="small" data-dellog="${esc(g.id)}">×</button>`}</td>
+      <td class="nowrap">${g.source === "puddle" ? "" : `<button class="small" data-editlog="${esc(g.id)}">編集</button> <button class="small" data-dellog="${esc(g.id)}">×</button>`}</td>
     </tr>`).join("") : "<tr><td colspan='7' class='muted'>まだ記録がありません</td></tr>";
 }
 function addGame(result, causes = [], memo = "", date = today()) {
@@ -531,12 +598,30 @@ $("causeChips").addEventListener("click", e => {
 });
 $("logSave").addEventListener("click", () => {
   if (!logDraft.result) { $("logMsg").textContent = "結果（勝ち／負け）を選んでください"; return; }
-  addGame(logDraft.result, [...logDraft.causes], $("logMemo").value.trim(), $("logDate").value || today());
-  logDraft = { result: null, causes: new Set() }; $("logMemo").value = "";
-  $("logMsg").textContent = "記録しました"; setTimeout(() => $("logMsg").textContent = "", 1500);
+  if (logDraft.editId) {
+    const g = state.log.find(x => x.id === logDraft.editId);
+    if (g) { g.result = logDraft.result; g.causes = [...logDraft.causes]; g.memo = $("logMemo").value.trim(); g.date = $("logDate").value || g.date; save(true); }
+    $("logMsg").textContent = "更新しました";
+  } else {
+    addGame(logDraft.result, [...logDraft.causes], $("logMemo").value.trim(), $("logDate").value || today());
+    $("logMsg").textContent = "記録しました";
+  }
+  logDraft = { result: null, causes: new Set(), editId: null }; $("logMemo").value = ""; $("logDate").value = today();
+  setTimeout(() => $("logMsg").textContent = "", 1500);
   renderLogForm(); renderLogTable();
 });
+$("logCancel").addEventListener("click", () => {
+  logDraft = { result: null, causes: new Set(), editId: null }; $("logMemo").value = ""; $("logDate").value = today(); renderLogForm();
+});
 $("logBody").addEventListener("click", e => {
+  const eid = e.target.dataset.editlog;
+  if (eid) {
+    const g = state.log.find(x => x.id === eid); if (!g) return;
+    logDraft = { result: g.result, causes: new Set(g.causes || []), editId: eid };
+    $("logMemo").value = g.memo || ""; $("logDate").value = g.date;
+    renderLogForm(); $("logFormTitle").scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
   const id = e.target.dataset.dellog; if (!id || !armed(e.target, "削除？")) return;
   state.log = state.log.filter(g => g.id !== id); save(true); renderLogTable();
 });
@@ -557,10 +642,6 @@ $("importPuddleText").addEventListener("click", () => {
   catch (err) { notify("puddleMsg", err.message, 8000); }
 });
 $("clearPuddle").addEventListener("click", e => { if (!armed(e.target)) return; state.puddle = []; state.puddleMeta = {}; save(); renderPuddleStatus(); });
-// 初回起動時に同梱サンプル（自分の履歴）を読み込む
-if (!(state.puddle || []).length && typeof PUDDLE_SEED !== "undefined" && PUDDLE_SEED.length) {
-  try { importPuddle(JSON.stringify(PUDDLE_SEED)); save(); } catch (_) {}
-}
 
 // 一覧
 document.querySelector("#tab-list thead").addEventListener("click", e => {
@@ -631,4 +712,9 @@ $("resetBtn").addEventListener("click", e => {
 });
 
 load();
+// 同梱の Puddle Farm 履歴を初回だけ取り込む（必ず load() の後。前に置くと保存内容を上書きしてしまう）
+if (!(state.puddle || []).length && typeof PUDDLE_SEED !== "undefined" && PUDDLE_SEED.length) {
+  try { importPuddle(JSON.stringify(PUDDLE_SEED)); save(); } catch (_) {}
+}
 renderAll();
+cloudInit();

@@ -100,7 +100,7 @@
   <!-- 試合ログ -->
   <section id="tab-log" class="hidden">
     <div class="card">
-      <h2>試合を記録</h2>
+      <h2 id="logFormTitle">試合を記録</h2>
       <div class="muted" id="logPair"></div>
       <div class="grid2" style="margin-top:8px">
         <div>
@@ -117,6 +117,7 @@
       <label class="field" style="margin-top:10px">ひとことメモ<input type="text" id="logMemo" placeholder="例：起き攻めで毎回投げられた"></label>
       <div class="row" style="margin-top:10px">
         <button class="primary" id="logSave">記録する</button>
+        <button id="logCancel" hidden>キャンセル</button>
         <span class="muted" id="logMsg"></span>
       </div>
     </div>
@@ -182,6 +183,11 @@
 
   <!-- データ管理 -->
   <section id="tab-data" class="hidden">
+    <div class="card">
+      <h2>保存先</h2>
+      <p class="muted" id="cloudStatus">クラウド保存：確認中…</p>
+      <p class="muted">メモ・試合ログ・戦績は、ブラウザ内とアーティファクトのクラウド保存の両方に保存されます。別の端末で開いても同じ内容になります。</p>
+    </div>
     <div class="card">
       <h2>バックアップ</h2>
       <p class="muted">メモ・戦績・試合ログ・チェックはこのブラウザ内に保存されます。別端末へ移す時やバックアップにはJSONを書き出してください。</p>

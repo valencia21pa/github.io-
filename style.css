@@ -175,3 +175,6 @@ footer a { color: inherit; }
 .name-cell { white-space: nowrap; }
 .sd-mini { width: 28px; height: 28px; object-fit: contain; vertical-align: middle; margin-right: 6px; }
 @media (max-width: 480px) { .opp-head .sd { width: 72px; height: 72px; } }
+
+.nowrap { white-space: nowrap; }
+.cloud.ok { color: var(--win); } .cloud.err { color: var(--lose); }
