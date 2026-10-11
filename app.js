@@ -82,6 +82,7 @@ function fillSelects() {
 
 // ---- 対策タブ ----
 const GUIDE_SECTIONS = [
+  { key: "roundstart", label: "開幕", icon: "開" },
   { key: "neutral", label: "立ち回り", icon: "↔" },
   { key: "moves",   label: "要注意技と対処", icon: "!" },
   { key: "defense", label: "固め・崩しへの防御", icon: "盾" },
@@ -200,10 +201,11 @@ function renderFramesStatus() {
 }
 
 // ---- 練習タブ ----
+const norm = (t) => typeof t === "string" ? { title: t } : t;
 function drillsFor(oppId, d) {
-  const base = COMMON_DRILLS.map((t, i) => ({ id: "c" + i, text: t }))
-    .concat((CHAR_DRILLS[oppId] || []).map((t, i) => ({ id: "k" + i, text: t })));
-  return base.concat(d.customDrills.map((t, i) => ({ id: "u" + i, text: t, custom: true })));
+  const base = COMMON_DRILLS.map((t, i) => ({ id: "c" + i, ...norm(t) }))
+    .concat((CHAR_DRILLS[oppId] || []).map((t, i) => ({ id: "k" + i, ...norm(t) })));
+  return base.concat(d.customDrills.map((t, i) => ({ id: "u" + i, title: t, custom: true })));
 }
 function drillProgress(mine, opp) {
   const d = state.pairs[pairKeyOf(mine, opp)];
@@ -220,7 +222,14 @@ function renderDrills() {
   $("drillsList").innerHTML = items.map(it => `
     <li class="${d.drills[it.id] ? "done" : ""}">
       <input type="checkbox" id="dr-${it.id}" data-drill="${it.id}" ${d.drills[it.id] ? "checked" : ""}>
-      <label for="dr-${it.id}">${esc(it.text)}</label>
+      <div class="drill">
+        <label for="dr-${it.id}">${esc(it.title)}</label>
+        ${it.record ? `<dl class="drill-steps">
+          <dt>記録</dt><dd>${esc(it.record)}</dd>
+          <dt>やる</dt><dd>${esc(it.action)}</dd>
+          <dt>合格</dt><dd>${esc(it.pass)}</dd>
+        </dl>` : ""}
+      </div>
       ${it.custom ? `<button class="small" data-deldrill="${it.id.slice(1)}">×</button>` : ""}
     </li>`).join("");
 }

@@ -114,7 +114,13 @@ tr.clickable:hover td { background: var(--chip); }
 .checklist li:last-child { border-bottom: none; }
 .checklist input { margin-top: 6px; }
 .checklist li.done label { text-decoration: line-through; color: var(--muted); }
-.checklist label { flex: 1; cursor: pointer; }
+.checklist label { flex: 1; cursor: pointer; font-weight: 700; }
+.checklist .drill { flex: 1; min-width: 0; }
+.checklist li.done .drill-steps { color: var(--muted); }
+.drill-steps { display: grid; grid-template-columns: 3em 1fr; gap: 2px 8px; margin: 4px 0 0; font-size: .88rem; }
+.drill-steps dt { color: var(--muted); font-weight: 700; }
+.drill-steps dt:first-of-type { color: var(--accent); }
+.drill-steps dd { margin: 0; }
 .progress { height: 6px; background: var(--chip); border-radius: 3px; overflow: hidden; margin: 6px 0 10px; }
 .progress > div { height: 100%; background: var(--win); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
