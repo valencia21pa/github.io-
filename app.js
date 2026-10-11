@@ -53,6 +53,14 @@ function pairData(key = pairKey()) {
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const today = () => new Date().toISOString().slice(0, 10);
 const $ = id => document.getElementById(id);
+// アーティファクト等では confirm/alert が表示されないので、ボタン自体を2段階にする
+function armed(btn, label = "もう一度押すと実行") {
+  if (btn.dataset.armed) { delete btn.dataset.armed; btn.textContent = btn.dataset.orig; return true; }
+  btn.dataset.orig = btn.textContent; btn.dataset.armed = "1"; btn.textContent = label;
+  setTimeout(() => { if (btn.dataset.armed) { delete btn.dataset.armed; btn.textContent = btn.dataset.orig; } }, 3000);
+  return false;
+}
+function notify(id, msg, ms = 4000) { const el = $(id); if (!el) return; el.textContent = msg; clearTimeout(el._t); el._t = setTimeout(() => el.textContent = "", ms); }
 
 // 戦績 = 旧手動カウント + 試合ログ
 function record(mine, opp) {
@@ -73,13 +81,37 @@ function fillSelects() {
 }
 
 // ---- 対策タブ ----
-function renderMatchup() {
-  const opp = charById(state.opp), mine = charById(state.mine);
-  $("oppInfo").innerHTML = `
+const GUIDE_SECTIONS = [
+  { key: "neutral", label: "立ち回り", icon: "↔" },
+  { key: "moves",   label: "要注意技と対処", icon: "!" },
+  { key: "defense", label: "固め・崩しへの防御", icon: "盾" },
+  { key: "oki",     label: "相手の起き攻め", icon: "起" },
+  { key: "punish",  label: "確定反撃を狙う場面", icon: "反" },
+  { key: "corner",  label: "壁際・状況別", icon: "壁" },
+  { key: "dont",    label: "やってはいけないこと", icon: "×" },
+];
+function renderGuide(opp) {
+  const g = opp.guide;
+  if (!g) {
+    return `<h2>相手：${esc(opp.name)}</h2>
+      <div class="tags">${(opp.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div>
+      <ul class="tips">${(opp.tips || []).map(t => `<li>${esc(t)}</li>`).join("") || "<li class='muted'>まだ情報がありません。下のメモ欄に書き込んでください。</li>"}</ul>`;
+  }
+  const sections = GUIDE_SECTIONS.filter(s => (g[s.key] || []).length).map((s, i) => `
+    <details class="guide" ${i < 2 ? "open" : ""}>
+      <summary><span class="g-icon ${s.key}">${s.icon}</span>${s.label}<span class="muted g-count">${g[s.key].length}</span></summary>
+      <ul class="tips">${g[s.key].map(t => `<li>${esc(t)}</li>`).join("")}</ul>
+    </details>`).join("");
+  return `
     <h2>相手：${esc(opp.name)}</h2>
     <div class="tags">${(opp.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div>
-    <h3>対策の基本</h3>
-    <ul class="tips">${(opp.tips || []).map(t => `<li>${esc(t)}</li>`).join("") || "<li class='muted'>まだ情報がありません。下のメモ欄に書き込んでください。</li>"}</ul>`;
+    <p class="core">${esc(g.core)}</p>
+    <div class="row between" style="margin:6px 0 2px"><h3 style="margin:0">対策の基本</h3><button class="small" id="guideToggle">すべて開く</button></div>
+    ${sections}`;
+}
+function renderMatchup() {
+  const opp = charById(state.opp), mine = charById(state.mine);
+  $("oppInfo").innerHTML = renderGuide(opp);
 
   // 自キャラがアバの時だけ、アバ視点のメモを出す
   const aba = state.mine === "aba" && ABA_NOTES[state.opp];
@@ -312,6 +344,13 @@ $("swap").addEventListener("click", () => { [state.mine, state.opp] = [state.opp
 document.querySelector(".tabs").addEventListener("click", e => { if (e.target.dataset.tab) showTab(e.target.dataset.tab); });
 
 // 対策
+$("oppInfo").addEventListener("click", e => {
+  if (e.target.id !== "guideToggle") return;
+  const ds = document.querySelectorAll("#oppInfo details.guide");
+  const open = [...ds].some(d => !d.open);
+  ds.forEach(d => d.open = open);
+  e.target.textContent = open ? "すべて閉じる" : "すべて開く";
+});
 $("stars").addEventListener("click", e => {
   const n = +e.target.dataset.star; if (!n) return;
   const d = pairData(); d.diff = d.diff === n ? 0 : n; save(true); renderMatchup();
@@ -362,7 +401,7 @@ $("logSave").addEventListener("click", () => {
   renderLogForm(); renderLogTable();
 });
 $("logBody").addEventListener("click", e => {
-  const id = e.target.dataset.dellog; if (!id || !confirm("この記録を削除しますか？")) return;
+  const id = e.target.dataset.dellog; if (!id || !armed(e.target, "削除？")) return;
   state.log = state.log.filter(g => g.id !== id); save(true); renderLogTable();
 });
 
@@ -381,11 +420,20 @@ $("listBody").addEventListener("click", e => {
 
 // データ管理
 $("exportBtn").addEventListener("click", () => {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `ggst-matchup-${today()}.json`;
-  a.click(); URL.revokeObjectURL(a.href);
+  const json = JSON.stringify(state, null, 2);
+  $("exportBox").hidden = false; $("exportText").value = json;
+  $("exportText").select(); notify("exportMsg", "下のJSONをコピーして保存してください");
+});
+$("copyExport").addEventListener("click", () => {
+  const t = $("exportText");
+  navigator.clipboard.writeText(t.value).then(() => notify("exportMsg", "コピーしました")).catch(() => { t.select(); notify("exportMsg", "選択したのでコピーしてください"); });
+});
+$("importText").addEventListener("click", () => {
+  try {
+    const data = JSON.parse($("exportText").value);
+    if (!data || typeof data.pairs !== "object") throw new Error("形式が違います");
+    state = Object.assign(DEFAULT_STATE(), data); save(); renderAll(); notify("exportMsg", "読み込みました");
+  } catch (err) { notify("exportMsg", "読み込みに失敗しました：" + err.message); }
 });
 $("importFile").addEventListener("change", async e => {
   const f = e.target.files[0]; if (!f) return;
@@ -393,8 +441,8 @@ $("importFile").addEventListener("change", async e => {
     const data = JSON.parse(await f.text());
     if (!data || typeof data.pairs !== "object") throw new Error("形式が違います");
     state = Object.assign(DEFAULT_STATE(), data);
-    save(); renderAll(); alert("読み込みました");
-  } catch (err) { alert("読み込みに失敗しました：" + err.message); }
+    save(); renderAll(); notify("exportMsg", "読み込みました");
+  } catch (err) { notify("exportMsg", "読み込みに失敗しました：" + err.message); }
   e.target.value = "";
 });
 $("importFrames").addEventListener("change", async e => {
@@ -402,13 +450,13 @@ $("importFrames").addEventListener("change", async e => {
   try {
     const res = importDustloop(JSON.parse(await f.text()));
     save(); renderFramesStatus();
-    alert(`${res.count} 件を読み込み、${res.chars.length} キャラ分を保存しました：${res.chars.join("、") || "（該当なし）"}`
-      + (res.unknown.length ? `\n未対応のキャラ名：${res.unknown.join(", ")}（データ管理で Dustloop表記 を設定したカスタムキャラに対応できます）` : ""));
-  } catch (err) { alert("読み込みに失敗しました：" + err.message); }
+    notify("framesMsg", `${res.count} 件を読み込み、${res.chars.length} キャラ分を保存しました：${res.chars.join("、") || "（該当なし）"}`
+      + (res.unknown.length ? ` ／ 未対応のキャラ名：${res.unknown.join(", ")}（Dustloop表記を設定したカスタムキャラで対応できます）` : ""), 8000);
+  } catch (err) { notify("framesMsg", "読み込みに失敗しました：" + err.message); }
   e.target.value = "";
 });
-$("clearFrames").addEventListener("click", () => {
-  if (!confirm("取り込んだフレームデータを削除しますか？")) return;
+$("clearFrames").addEventListener("click", e => {
+  if (!armed(e.target)) return;
   state.frames = {}; save(); renderFramesStatus();
 });
 $("addChar").addEventListener("click", () => {
@@ -419,12 +467,12 @@ $("addChar").addEventListener("click", () => {
   save(); renderAll();
 });
 $("customList").addEventListener("click", e => {
-  const id = e.target.dataset.del; if (!id || !confirm("このキャラを削除しますか？")) return;
+  const id = e.target.dataset.del; if (!id || !armed(e.target, "削除？")) return;
   state.custom = state.custom.filter(c => c.id !== id);
   save(); renderAll();
 });
-$("resetBtn").addEventListener("click", () => {
-  if (!confirm("すべてのメモ・戦績・試合ログ・チェックを削除します。よろしいですか？")) return;
+$("resetBtn").addEventListener("click", e => {
+  if (!armed(e.target, "本当に削除する（もう一度押す）")) return;
   state.pairs = {}; state.log = []; save(); renderAll();
 });
 

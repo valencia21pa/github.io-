@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>GGST キャラ対策ノート</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Shippori+Mincho+B1:wght@700;800&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -193,10 +194,18 @@
       <h2>バックアップ</h2>
       <p class="muted">メモ・戦績・試合ログ・チェックはこのブラウザ内に保存されます。別端末へ移す時やバックアップにはJSONを書き出してください。</p>
       <div class="row">
-        <button class="primary" id="exportBtn">JSONを書き出し</button>
-        <label class="field narrow">JSONを読み込み
+        <button class="primary" id="exportBtn">JSONを表示（コピーして保存）</button>
+        <label class="field narrow">JSONファイルを読み込み
           <input type="file" id="importFile" accept="application/json,.json">
         </label>
+        <span class="muted" id="exportMsg"></span>
+      </div>
+      <div id="exportBox" hidden style="margin-top:10px">
+        <textarea id="exportText" rows="6" placeholder="ここにJSONを貼り付けて「貼り付けたJSONを読み込み」でも復元できます"></textarea>
+        <div class="row" style="margin-top:6px">
+          <button class="small" id="copyExport">コピー</button>
+          <button class="small" id="importText">貼り付けたJSONを読み込み</button>
+        </div>
       </div>
     </div>
     <div class="card">
@@ -210,6 +219,7 @@
         <button id="clearFrames">取り込んだフレームデータを削除</button>
       </div>
       <div class="muted" id="framesStatus" style="margin-top:8px"></div>
+      <div class="muted" id="framesMsg"></div>
     </div>
     <div class="card">
       <h2>キャラを追加</h2>
