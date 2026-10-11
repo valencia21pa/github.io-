@@ -355,7 +355,7 @@ function renderCustom() {
 }
 
 // ---- タブ ----
-const TABS = ["matchup", "frames", "drills", "log", "analysis", "list", "system", "data"];
+const TABS = ["matchup", "frames", "drills", "log", "analysis", "list", "data"];
 let currentTab = "matchup";
 function showTab(name) {
   currentTab = name;
@@ -365,7 +365,7 @@ function showTab(name) {
 }
 function renderTab(name) {
   ({ matchup: renderMatchup, frames: renderFrames, drills: renderDrills, log: () => { renderLogForm(); renderLogTable(); },
-     analysis: renderAnalysis, list: renderList, data: renderCustom, system: () => {} })[name]();
+     analysis: renderAnalysis, list: renderList, data: renderCustom })[name]();
 }
 function renderAll() { fillSelects(); renderTab(currentTab); }
 
