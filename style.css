@@ -105,6 +105,9 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 tr.clickable { cursor: pointer; }
 tr.clickable:hover td { background: var(--chip); }
 .table-wrap { overflow-x: auto; max-width: 100%; }
+.frame-tools { align-items: center; margin-bottom: 6px; }
+.frame-tools label.field { flex: 1 1 220px; }
+label.chk { display: inline-flex; gap: 6px; align-items: center; font-size: .85rem; cursor: pointer; }
 .saved { font-size: .8rem; color: var(--win); opacity: 0; transition: opacity .3s; }
 .saved.show { opacity: 1; }
 .system li { margin: 4px 0; }

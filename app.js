@@ -147,31 +147,54 @@ function framesFor(id) {
   const c = charById(id);
   return (state.frames[id] || FRAME_DATA[id] || []);
 }
+// フレームタブの絞り込み状態（タブ切り替えでも保持）
+let frameFilter = { q: "", punish: false, specials: false, sort: "" };
+const advNum = v => { const n = parseInt(String(v ?? "").replace(/^[^\d+-]*/, ""), 10); return isNaN(n) ? null : n; };
 function renderFrames() {
   const opp = charById(state.opp);
   $("framesTitle").textContent = `${opp.name} のフレームデータ`;
   const km = KEY_MOVES[opp.id] || [];
   $("keyMoves").innerHTML = km.length ? `<h3>まず警戒する技</h3><div class="tags">${km.map(m => `<span class="tag neutral">${esc(m)}</span>`).join("")}</div>` : "";
-  const rows = framesFor(opp.id);
-  if (!rows.length) {
+  const all = framesFor(opp.id);
+  if (!all.length) {
     $("framesBody").innerHTML = `<p class="muted" style="margin-top:12px">数値データは未取り込みです。「データ管理」タブから Dustloop の JSON を読み込むと、ここに発生・硬直差などの表が出ます。</p>`;
     return;
   }
+  const f = frameFilter, q = f.q.trim().toLowerCase();
+  let rows = all.filter(m =>
+    (!q || (m.name + " " + m.input).toLowerCase().includes(q)) &&
+    (!f.punish || (advNum(m.onBlock) ?? 0) <= -5) &&
+    (!f.specials || m.name));
+  if (f.sort === "block") rows = rows.slice().sort((a, b) => (advNum(a.onBlock) ?? 99) - (advNum(b.onBlock) ?? 99));
+  if (f.sort === "startup") rows = rows.slice().sort((a, b) => (advNum(a.startup) ?? 999) - (advNum(b.startup) ?? 999));
   const fmtAdv = v => {
     if (v === "" || v == null) return "<span class='muted'>—</span>";
-    const n = parseInt(v, 10);
-    if (isNaN(n)) return esc(v);
-    return `<span class="${n >= 0 ? "win" : (n <= -5 ? "lose" : "")}">${n > 0 ? "+" + n : n}</span>`;
+    const n = advNum(v);
+    if (n === null) return esc(v);
+    const cls = n >= 0 ? "win" : (n <= -5 ? "lose" : "");
+    return `<span class="${cls}" title="${esc(v)}">${esc(v)}</span>`;
   };
   $("framesBody").innerHTML = `
-    <p class="muted">ガード後 −5 以下は赤字（確反が狙えることが多い）。詳しい注記は Dustloop を参照。</p>
+    <div class="row frame-tools">
+      <label class="field">技名・入力で検索<input type="search" id="frameQ" value="${esc(f.q)}" placeholder="例：236S / Viper / 2D"></label>
+      <label class="chk"><input type="checkbox" id="framePunish" ${f.punish ? "checked" : ""}>確反あり（ガード後 −5 以下）だけ</label>
+      <label class="chk"><input type="checkbox" id="frameSpecials" ${f.specials ? "checked" : ""}>必殺技・特殊技だけ</label>
+      <label class="field narrow">並び順
+        <select id="frameSort">
+          <option value="" ${f.sort === "" ? "selected" : ""}>Dustloop順</option>
+          <option value="block" ${f.sort === "block" ? "selected" : ""}>ガード後が不利な順</option>
+          <option value="startup" ${f.sort === "startup" ? "selected" : ""}>発生が早い順</option>
+        </select>
+      </label>
+    </div>
+    <p class="muted">${rows.length} / ${all.length} 技。ガード後 −5 以下は赤字（−5/−6 は 2P・5P 級、−7 以下で近S・2K 始動、−10 以下で最大）。[ ] は溜め版、( IAD ) は低空時の値。</p>
     <div class="table-wrap"><table>
       <thead><tr><th>技</th><th>入力</th><th class="num">発生</th><th class="num">持続</th><th class="num">硬直</th><th class="num">ガード後</th><th class="num">ヒット後</th><th>ガード</th><th>Lv</th></tr></thead>
       <tbody>${rows.map(m => `<tr>
         <td>${esc(m.name)}</td><td>${esc(m.input)}</td>
         <td class="num">${esc(m.startup)}</td><td class="num">${esc(m.active)}</td><td class="num">${esc(m.recovery)}</td>
         <td class="num">${fmtAdv(m.onBlock)}</td><td class="num">${fmtAdv(m.onHit)}</td>
-        <td>${esc(m.guard)}</td><td>${esc(m.level)}</td></tr>`).join("")}</tbody>
+        <td>${esc(m.guard)}</td><td>${esc(m.level)}</td></tr>`).join("") || "<tr><td colspan='9' class='muted'>該当なし</td></tr>"}</tbody>
     </table></div>`;
 }
 
@@ -373,6 +396,19 @@ $("noteFields").addEventListener("input", e => {
   const k = e.target.dataset.note; if (!k) return;
   pairData().notes[k] = e.target.value;
   clearTimeout(typeTimer); typeTimer = setTimeout(() => save(true), 400);
+});
+
+// フレーム
+$("framesBody").addEventListener("input", e => {
+  if (e.target.id === "frameQ") {
+    frameFilter.q = e.target.value;
+    clearTimeout(frameFilter._t); frameFilter._t = setTimeout(() => { const pos = e.target.selectionStart; renderFrames(); const q = $("frameQ"); q.focus(); q.setSelectionRange(pos, pos); }, 250);
+  }
+});
+$("framesBody").addEventListener("change", e => {
+  if (e.target.id === "framePunish") { frameFilter.punish = e.target.checked; renderFrames(); }
+  if (e.target.id === "frameSpecials") { frameFilter.specials = e.target.checked; renderFrames(); }
+  if (e.target.id === "frameSort") { frameFilter.sort = e.target.value; renderFrames(); }
 });
 
 // 練習
