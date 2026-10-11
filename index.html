@@ -1,0 +1,1145 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>マイクラ攻略ノート</title>
+<meta name="description" content="マインクラフトの便利装置・レッドストーン回路・建築のコツと、ブラウザで使える建物設計ツール。">
+<style>
+:root {
+  --bg: #f4f1ea;
+  --surface: #ffffff;
+  --surface-2: #ece7dc;
+  --text: #22201c;
+  --muted: #6b655a;
+  --border: #d8d1c2;
+  --accent: #3f7d2c;
+  --accent-text: #ffffff;
+  --warn: #b5541c;
+  --code-bg: #efe9dd;
+  --grid-line: rgba(0,0,0,.12);
+  --grid-major: rgba(0,0,0,.3);
+  --grid-bg: #faf8f3;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17181a;
+    --surface: #212326;
+    --surface-2: #2b2e32;
+    --text: #ebe8e1;
+    --muted: #a39d92;
+    --border: #3a3d42;
+    --accent: #7cc35a;
+    --accent-text: #10210a;
+    --warn: #f08a4b;
+    --code-bg: #2b2e32;
+    --grid-line: rgba(255,255,255,.08);
+    --grid-major: rgba(255,255,255,.25);
+    --grid-bg: #1b1d20;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #17181a;
+  --surface: #212326;
+  --surface-2: #2b2e32;
+  --text: #ebe8e1;
+  --muted: #a39d92;
+  --border: #3a3d42;
+  --accent: #7cc35a;
+  --accent-text: #10210a;
+  --warn: #f08a4b;
+  --code-bg: #2b2e32;
+  --grid-line: rgba(255,255,255,.08);
+  --grid-major: rgba(255,255,255,.25);
+  --grid-bg: #1b1d20;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", sans-serif;
+  line-height: 1.75;
+}
+a { color: var(--accent); }
+header.site {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+header.site .wrap { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 18px; padding-bottom: 12px; flex-wrap: wrap; }
+h1 { font-size: 1.5rem; margin: 0; letter-spacing: .02em; }
+h1 small { display: block; font-size: .8rem; color: var(--muted); font-weight: 400; }
+.theme-btn { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; cursor: pointer; font: inherit; font-size: .85rem; }
+nav.tabs { position: sticky; top: 0; z-index: 10; background: var(--surface); border-bottom: 1px solid var(--border); }
+nav.tabs .wrap { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+nav.tabs button {
+  font: inherit; font-size: .95rem; background: none; border: none; color: var(--muted);
+  padding: 12px 14px; cursor: pointer; border-bottom: 3px solid transparent; white-space: nowrap;
+}
+nav.tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+main { padding: 24px 0 64px; }
+section.panel[hidden] { display: none; }
+h2 { font-size: 1.35rem; margin: 8px 0 4px; }
+.lead { color: var(--muted); margin: 0 0 20px; }
+h3 { font-size: 1.1rem; margin: 0 0 6px; }
+h4 { font-size: .95rem; margin: 14px 0 4px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; min-width: 0; }
+.card.wide { grid-column: 1 / -1; }
+.card p { margin: 6px 0; }
+.card ol, .card ul { margin: 6px 0; padding-left: 1.3em; }
+.tag { display: inline-block; font-size: .72rem; padding: 1px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); margin-right: 4px; vertical-align: 2px; }
+.tag.easy { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+.tag.mid { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+.note { font-size: .85rem; color: var(--muted); border-left: 3px solid var(--border); padding-left: 10px; margin: 10px 0 0; }
+.warn { border-left-color: var(--warn); }
+code, kbd { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font-size: .88em; }
+table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; font-size: .8rem; }
+.table-scroll { overflow-x: auto; }
+
+/* 図解 */
+.diagram { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; margin: 10px 0 4px; }
+.dgrid { display: grid; gap: 2px; padding: 6px; background: var(--surface-2); border-radius: 8px; }
+.dcell { width: 24px; height: 24px; border-radius: 3px; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: rgba(0,0,0,.65); }
+.dcell.air { background: transparent; }
+.dlegend { font-size: .8rem; display: grid; gap: 3px; }
+.dlegend span { display: inline-flex; align-items: center; gap: 6px; }
+.dlegend i { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+.dcap { font-size: .75rem; color: var(--muted); width: 100%; margin-top: -6px; }
+
+.swatches { display: flex; gap: 4px; margin: 8px 0; flex-wrap: wrap; }
+.swatches i { width: 34px; height: 34px; border-radius: 6px; display: inline-block; border: 1px solid rgba(0,0,0,.15); }
+.palette-names { font-size: .82rem; color: var(--muted); }
+
+/* ツール */
+.tool { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; align-items: start; }
+@media (max-width: 860px) { .tool { grid-template-columns: minmax(0, 1fr); } }
+.toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 10px; }
+.btn {
+  font: inherit; font-size: .85rem; background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px; cursor: pointer; min-height: 34px;
+}
+.btn:hover { border-color: var(--muted); }
+.btn.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.sep { width: 1px; height: 24px; background: var(--border); margin: 0 4px; }
+.field { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; }
+.field input[type=number] { width: 64px; font: inherit; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+.canvas-box { background: var(--grid-bg); border: 1px solid var(--border); border-radius: 10px; padding: 8px; overflow: auto; touch-action: none; }
+#gridCanvas { display: block; margin: 0 auto; cursor: crosshair; touch-action: none; }
+#isoCanvas { display: block; width: 100%; height: auto; }
+.layer-ctl { display: flex; align-items: center; gap: 8px; margin: 10px 0; flex-wrap: wrap; }
+.layer-ctl strong { font-size: 1.05rem; min-width: 7.5em; }
+.status { font-size: .8rem; color: var(--muted); min-height: 1.4em; }
+.blocks { display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 4px; max-height: 330px; overflow: auto; }
+.blk { display: flex; align-items: center; gap: 6px; font: inherit; font-size: .8rem; text-align: left; padding: 4px 6px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
+.blk i { width: 18px; height: 18px; border-radius: 3px; flex: none; border: 1px solid rgba(0,0,0,.2); }
+.blk.on { outline: 2px solid var(--accent); outline-offset: -1px; font-weight: 600; }
+.side h3 { font-size: .95rem; margin: 14px 0 6px; }
+.side h3:first-child { margin-top: 0; }
+.mat-list { font-size: .82rem; }
+.mat-list td { padding: 4px 6px; }
+.links li { margin-bottom: 6px; }
+footer { color: var(--muted); font-size: .8rem; padding: 24px 0 40px; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <h1>マイクラ攻略ノート<small>便利装置・回路・建築・設計ツール</small></h1>
+    <button class="theme-btn" id="themeBtn" type="button">テーマ切替</button>
+  </div>
+</header>
+
+<nav class="tabs" aria-label="セクション">
+  <div class="wrap" role="tablist">
+    <button role="tab" data-tab="devices" aria-selected="true">便利装置</button>
+    <button role="tab" data-tab="circuits" aria-selected="false">回路</button>
+    <button role="tab" data-tab="building" aria-selected="false">建築のコツ</button>
+    <button role="tab" data-tab="planner" aria-selected="false">設計ツール</button>
+  </div>
+</nav>
+
+<main class="wrap">
+
+<!-- ================= 便利装置 ================= -->
+<section class="panel" id="devices">
+  <h2>便利装置</h2>
+  <p class="lead">序盤から作れて、毎日のプレイがラクになる装置をまとめました。図は横から見た断面です。</p>
+
+  <div class="cards">
+    <div class="card">
+      <h3><span class="tag easy">かんたん</span>マグマごみ箱（看板式）</h3>
+      <p>いらないアイテムを投げ込むと溶岩で燃えて消えるごみ箱。看板が溶岩をせき止めるので、溶岩が流れ出てきません。</p>
+      <div class="diagram" data-diagram="lavaTrash"></div>
+      <ol>
+        <li>壁に1マスの穴を掘る（目線より少し下が投げやすい）</li>
+        <li>穴の奥に溶岩バケツで溶岩を置く</li>
+        <li>穴の手前の面に看板を貼る → 溶岩がこぼれない</li>
+        <li><kbd>Q</kbd>（統合版はアイテムをドロップ）で投げ込む</li>
+      </ol>
+      <p class="note warn">溶岩の周りを木材にしないこと（燃え移ります）。石・丸石・深層岩などで囲みましょう。</p>
+    </div>
+
+    <div class="card">
+      <h3><span class="tag easy">かんたん</span>チェスト式ごみ箱（サボテン/溶岩）</h3>
+      <p>チェストに入れるだけで自動で処分。チェスト → ホッパー → ドロッパー（クロックで連射）→ サボテン or 溶岩 の流れで捨てます。</p>
+      <div class="diagram" data-diagram="chestTrash"></div>
+      <ul>
+        <li>ホッパーはドロッパーの方へ向けて設置（スニークしながら置く）</li>
+        <li>ドロッパーはオブザーバークロックやコンパレーターで連射させる</li>
+        <li>サボテンは触れたアイテムを即消去。溶岩でもOK</li>
+      </ul>
+      <p class="note">間違って大事な物を入れないよう、チェストに看板で「ごみ箱」と書いておくと安心。</p>
+    </div>
+
+    <div class="card">
+      <h3><span class="tag easy">かんたん</span>自動かまど</h3>
+      <p>上のチェストに焼きたい物、横のチェストに燃料を入れるだけで、下のチェストに完成品がたまります。</p>
+      <div class="diagram" data-diagram="smelter"></div>
+      <ul>
+        <li>上のホッパー → かまどの<strong>上</strong>（材料）</li>
+        <li>横のホッパー → かまどの<strong>横</strong>（燃料）</li>
+        <li>かまどの<strong>下</strong>のホッパー → 完成品チェスト</li>
+      </ul>
+      <p class="note">かまどを横に何台も並べ、上をホッパーでつなぐと大量精錬機に。溶鉱炉（鉱石）・燻製器（食料）は2倍速です。</p>
+    </div>
+
+    <div class="card">
+      <h3><span class="tag mid">ふつう</span>アイテム仕分け機</h3>
+      <p>ホッパーとコンパレーターで、流れてきたアイテムを種類ごとのチェストに自動で分けます。</p>
+      <h4>しくみ</h4>
+      <ul>
+        <li>フィルター用ホッパーを、レッドストーントーチで<strong>ロック</strong>しておく</li>
+        <li>仕分けたいアイテムが一定数を超えると、コンパレーターの信号が<strong>2</strong>になる</li>
+        <li>信号2のときだけトーチが消えてロック解除 → 1個だけ下のチェストへ流れる</li>
+      </ul>
+      <h4>フィルターの中身（Java版の定番）</h4>
+      <p>1枠目に仕分けたいアイテムを <strong>18個</strong>、残り4枠に名前を変えた「ダミーアイテム」を各 <strong>1個</strong>。</p>
+      <p class="note">統合版は個数や配置が異なる設計が多いです。版に合わせた設計図を参考にしてください。</p>
+    </div>
+
+    <div class="card">
+      <h3><span class="tag easy">かんたん</span>水流アイテム回収</h3>
+      <p>農場やトラップで散らばったアイテムを、水流で1か所のホッパーに集めます。</p>
+      <ul>
+        <li>水源から流れる水は<strong>8マス</strong>先まで届く</li>
+        <li>水路の終点にホッパー → チェスト</li>
+        <li>終点を溶岩にすれば「自動ごみ捨て水路」にもなる</li>
+      </ul>
+      <p class="note">水路の下に氷を敷くと流れるアイテムが速くなります。</p>
+    </div>
+
+    <div class="card">
+      <h3><span class="tag mid">ふつう</span>サトウキビ・カボチャ自動収穫</h3>
+      <p>オブザーバーが成長を検知 → ピストンが押して収穫 → 水流 or ホッパー付きトロッコで回収。</p>
+      <ul>
+        <li>サトウキビ：オブザーバーは<strong>2段目</strong>（成長後の位置）を見る。ピストンも2段目</li>
+        <li>カボチャ/スイカ：実がなるマスをオブザーバーで見て、ピストンで割る</li>
+        <li>下にホッパー付きトロッコを走らせると取りこぼしにくい</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3><span class="tag easy">かんたん</span>そのほかの定番</h3>
+      <table>
+        <tr><th>装置</th><th>ポイント</th></tr>
+        <tr><td>拠点の湧きつぶし</td><td>Java/統合版とも、明るさ<strong>0</strong>の場所でしか敵は湧かない。たいまつやランタンを置こう</td></tr>
+        <tr><td>自動ドア</td><td>感圧板＋鉄のドア。村人は木の感圧板を押すので、村では石の感圧板を</td></tr>
+        <tr><td>経験値トラップ</td><td>スポナーの周りを囲い、落下＋水流で敵を一か所に集めてとどめを刺す</td></tr>
+        <tr><td>交易所</td><td>村人を1マスずつ囲い、職業ブロックを置く。治療（ゾンビ村人）で値引きが大きい</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 回路 ================= -->
+<section class="panel" id="circuits" hidden>
+  <h2>レッドストーン回路</h2>
+  <p class="lead">まずは部品の性質を覚えて、基本回路を組み合わせるのが近道です。</p>
+
+  <div class="cards">
+    <div class="card wide">
+      <h3>主な部品</h3>
+      <div class="table-scroll">
+      <table>
+        <tr><th>部品</th><th>はたらき</th><th>覚えておくこと</th></tr>
+        <tr><td>レッドストーンダスト</td><td>信号を運ぶ線</td><td>信号は<strong>15マス</strong>で途切れる。のばすならリピーターで再増幅</td></tr>
+        <tr><td>レッドストーントーチ</td><td>常にON／付いたブロックがONになるとOFF</td><td>NOT（反転）回路の基本</td></tr>
+        <tr><td>リピーター</td><td>信号を15に戻す・遅延・一方向化</td><td>右クリックで遅延1〜4（0.1〜0.4秒）。横からリピーターを当てると<strong>ロック</strong></td></tr>
+        <tr><td>コンパレーター</td><td>比較・減算・容器の中身を読む</td><td>先端ランプOFF＝比較モード、ON＝減算モード</td></tr>
+        <tr><td>オブザーバー</td><td>見ているブロックの変化で1回パルス</td><td>顔側が監視、反対の赤い点から出力</td></tr>
+        <tr><td>ピストン／粘着ピストン</td><td>ブロックを押す／押して引く</td><td>押せるのは<strong>12ブロック</strong>まで。黒曜石などは押せない</td></tr>
+        <tr><td>ドロッパー／ディスペンサー</td><td>アイテムを出す／使う</td><td>ディスペンサーは水・溶岩・矢・骨粉なども使える</td></tr>
+        <tr><td>日照センサー</td><td>明るさで信号</td><td>右クリックで反転＝夜だけON</td></tr>
+      </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3><span class="tag easy">基本</span>NOT回路（反転）</h3>
+      <p>ブロックの側面にトーチ。入力ON → トーチOFF。入力OFF → トーチON。</p>
+      <div class="diagram" data-diagram="notGate"></div>
+    </div>
+
+    <div class="card">
+      <h3><span class="tag easy">基本</span>OR回路・AND回路</h3>
+      <p><strong>OR</strong>：2本のダストを1本に合流させるだけ。どちらかONで出力ON。</p>
+      <p><strong>AND</strong>：2つの入力ブロックにトーチを立て、その上をダストでつなぎ、最後をもう一度トーチで反転。両方ONのときだけ出力ON。</p>
+      <p class="note">AND ＝ NOT(NOT A OR NOT B)。トーチ3本で作れます。</p>
+    </div>
+
+    <div class="card">
+      <h3><span class="tag easy">基本</span>クロック（連続パルス）</h3>
+      <ul>
+        <li><strong>オブザーバークロック</strong>：2つのオブザーバーを向かい合わせ。最速・最小</li>
+        <li><strong>リピータークロック</strong>：リピーターとダストの輪。遅延で周期を調整</li>
+        <li><strong>ホッパークロック</strong>：2つのホッパーでアイテムを往復させ、長い周期を作る</li>
+      </ul>
+      <p class="note">止めたいときはレバーでピストンを動かして輪を切る、またはリピーターをロック。</p>
+    </div>
+
+    <div class="card">
+      <h3><span class="tag mid">応用</span>T フリップフロップ</h3>
+      <p>ボタンを押すたびにON/OFFが切り替わる回路。ボタン1つでドアや照明を操作できます。</p>
+      <ul>
+        <li>かんたん版：ドロッパー2つを向かい合わせ、1つにアイテム1個。コンパレーターで片方を読む</li>
+        <li>粘着ピストン版：ブロックを押し引きして信号の通り道を切り替える</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3><span class="tag mid">応用</span>パルス延長・短縮</h3>
+      <ul>
+        <li><strong>延長</strong>：リピーターを連続でつなぐ。またはコンパレーター＋ホッパーで長時間化</li>
+        <li><strong>短縮（モノステーブル）</strong>：オブザーバーでピストンなどの動きを見ると、長押しでも1パルスに</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3><span class="tag easy">実用</span>夜だけつく自動照明</h3>
+      <ol>
+        <li>日照センサーを置いて右クリック（反転モード＝青っぽい見た目）</li>
+        <li>ダストでレッドストーンランプへつなぐ</li>
+        <li>夜になると自動で点灯</li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <h3><span class="tag mid">実用</span>ピストン隠し扉</h3>
+      <ul>
+        <li>1×2：粘着ピストンを縦に2段。レバーや感圧板で同時に動かす</li>
+        <li>2×2：左右に粘着ピストン2段ずつ。リピーターで「引く→戻す」の順番に遅延をつける</li>
+        <li>壁と同じブロックを扉にすると見分けがつかない</li>
+      </ul>
+      <p class="note">開閉の入力はTフリップフロップでボタン1つにまとめると便利です。</p>
+    </div>
+
+    <div class="card">
+      <h3><span class="tag mid">実用</span>コンパレーターでチェスト残量表示</h3>
+      <p>チェスト → コンパレーター → ダストを並べると、中身が多いほど遠くまで光ります。倉庫の残量メーターに。</p>
+      <p class="note">容器の「満タン度」が信号0〜15になります。1スタック単位のアイテムで計算されます。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 建築 ================= -->
+<section class="panel" id="building" hidden>
+  <h2>建築のコツ</h2>
+  <p class="lead">「豆腐ハウス」から抜け出すための考え方と、すぐ使えるブロックの組み合わせ。</p>
+
+  <div class="cards">
+    <div class="card wide">
+      <h3>見た目が一気に良くなる7つのルール</h3>
+      <ol>
+        <li><strong>凹凸（奥行き）をつける</strong>：柱を1マス前に出す、窓をへこませる。平らな壁が一番「豆腐」っぽい</li>
+        <li><strong>柱と梁で区切る</strong>：原木の柱を角と4〜5マスおきに。壁が分割されてリズムが出る</li>
+        <li><strong>基礎を作る</strong>：一番下を丸石や石レンガにすると、建物が地面に立っている感じが出る</li>
+        <li><strong>屋根は張り出す</strong>：壁より1マス外まで階段を伸ばす。三角屋根は45°（階段）が基本</li>
+        <li><strong>色は3〜4種類まで</strong>：メイン・サブ・アクセント（＋屋根）。多すぎるとごちゃつく</li>
+        <li><strong>奇数幅で作る</strong>：7・9・11マスにすると、ドアや屋根の頂点が真ん中に来る</li>
+        <li><strong>小物で仕上げ</strong>：トラップドアの窓枠、フェンス、ランタン、葉ブロック、植木鉢</li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <h3>配色パレット：木と石の家</h3>
+      <div class="swatches" data-swatch="sprucelog,spruce,cobble,stonebrick,darkoak"></div>
+      <p class="palette-names">トウヒ原木（柱）／トウヒ板材（壁）／丸石（基礎）／石レンガ／ダークオーク（屋根）</p>
+      <p>迷ったらこれ。どんな地形にもなじむ王道の組み合わせ。</p>
+    </div>
+    <div class="card">
+      <h3>配色パレット：白壁の洋館</h3>
+      <div class="swatches" data-swatch="quartz,white,darkoak,oaklog,gray"></div>
+      <p class="palette-names">クォーツ／白コンクリート／ダークオーク／オーク原木／灰色コンクリート</p>
+      <p>白壁＋濃い木の梁でハーフティンバー風。窓を多めに。</p>
+    </div>
+    <div class="card">
+      <h3>配色パレット：砂漠の家</h3>
+      <div class="swatches" data-swatch="sandstone,terracotta,oak,brick,leaves"></div>
+      <p class="palette-names">砂岩／テラコッタ／オーク板材／レンガ／葉ブロック</p>
+      <p>平屋根＋屋上テラス。テラコッタでアクセントライン。</p>
+    </div>
+    <div class="card">
+      <h3>配色パレット：モダン</h3>
+      <div class="swatches" data-swatch="white,gray,glass,deepslate,oak"></div>
+      <p class="palette-names">白・灰色コンクリート／ガラス／深層岩タイル／オーク板材</p>
+      <p>大きな窓、箱を少しずらして重ねる、平屋根。直線を意識。</p>
+    </div>
+
+    <div class="card">
+      <h3>屋根の種類</h3>
+      <table>
+        <tr><th>形</th><th>特徴</th></tr>
+        <tr><td>切妻（三角）</td><td>一番かんたん。階段を1段ずつ上げる</td></tr>
+        <tr><td>寄棟</td><td>4方向から傾斜。角は階段の向きで調整</td></tr>
+        <tr><td>緩い傾斜</td><td>ハーフブロックと階段を交互に。和風・洋館に</td></tr>
+        <tr><td>急な傾斜</td><td>階段を2段ずつ積む。北欧風・教会に</td></tr>
+        <tr><td>平屋根</td><td>モダン・砂漠向き。縁を1段上げると締まる</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>作り方の手順（9×11の小さな家）</h3>
+      <ol>
+        <li>地面を平らにし、丸石で9×11の基礎を1段</li>
+        <li>四隅と中間に原木の柱（高さ4）</li>
+        <li>柱の間を板材の壁で埋め、壁は柱より<strong>1マス内側</strong>にずらすと奥行きが出る</li>
+        <li>窓（ガラス板）とドアを開け、窓の横にトラップドア</li>
+        <li>短い辺を妻側にして、階段で三角屋根。1マス張り出す</li>
+        <li>妻壁（三角の部分）は別の色で埋める</li>
+        <li>ランタン、花、フェンス、小道で外回りを仕上げ</li>
+      </ol>
+      <p class="note">設計ツールの「サンプルの家」でこの家を立体で確認できます。</p>
+    </div>
+
+    <div class="card">
+      <h3>内装のアイデア</h3>
+      <ul>
+        <li>テーブル：フェンス＋感圧板、またはトラップドアを4方向</li>
+        <li>椅子：階段＋側面に看板／トラップドア</li>
+        <li>棚：本棚・樽・アイテムフレームを組み合わせ</li>
+        <li>照明：天井からチェーン＋ランタン</li>
+        <li>床：2種類の板材で模様や、カーペットでラグ</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3>大きな建物のコツ</h3>
+      <ul>
+        <li>まず全体の<strong>シルエット</strong>（輪郭）を羊毛などで仮組み</li>
+        <li>1つの大きな箱より、大小の箱を組み合わせる</li>
+        <li>壁の素材を高さで変える（下は石、上は木）</li>
+        <li>円柱や塔は円ジェネレーターで正確に（設計ツールにあり）</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 設計ツール ================= -->
+<section class="panel" id="planner" hidden>
+  <h2>建物設計ツール</h2>
+  <p class="lead">1段ずつブロックを塗って建物を設計できます。右の立体プレビューと必要ブロック数も自動で計算。データはこのブラウザに自動保存されます。</p>
+
+  <div class="tool">
+    <div>
+      <div class="toolbar" id="toolBar">
+        <button class="btn on" data-tool="pen" type="button">ペン</button>
+        <button class="btn" data-tool="erase" type="button">消しゴム</button>
+        <button class="btn" data-tool="rect" type="button">四角（塗り）</button>
+        <button class="btn" data-tool="frame" type="button">四角（枠）</button>
+        <button class="btn" data-tool="line" type="button">直線</button>
+        <button class="btn" data-tool="fill" type="button">バケツ</button>
+        <button class="btn" data-tool="pick" type="button">スポイト</button>
+        <span class="sep"></span>
+        <button class="btn" id="undoBtn" type="button">元に戻す</button>
+        <button class="btn" id="redoBtn" type="button">やり直し</button>
+      </div>
+
+      <div class="layer-ctl">
+        <button class="btn" id="layerDown" type="button" aria-label="下の段へ">▼</button>
+        <strong id="layerLabel">高さ Y=0</strong>
+        <button class="btn" id="layerUp" type="button" aria-label="上の段へ">▲</button>
+        <span class="sep"></span>
+        <button class="btn" id="copyDown" type="button">下の段をコピー</button>
+        <button class="btn" id="clearLayer" type="button">この段を消去</button>
+        <label class="field"><input type="checkbox" id="ghostChk" checked> 下の段を薄く表示</label>
+      </div>
+
+      <div class="canvas-box" id="gridBox"><canvas id="gridCanvas"></canvas></div>
+      <div class="status" id="status">クリック／ドラッグで配置。右クリックで消去。</div>
+
+      <div class="toolbar" style="margin-top:12px">
+        <label class="field">横 X <input type="number" id="sizeW" min="4" max="64" value="16"></label>
+        <label class="field">奥 Z <input type="number" id="sizeD" min="4" max="64" value="16"></label>
+        <label class="field">高さ <input type="number" id="sizeH" min="1" max="64" value="12"></label>
+        <button class="btn" id="resizeBtn" type="button">サイズ変更</button>
+      </div>
+
+      <h3 style="margin-top:18px">円ジェネレーター</h3>
+      <div class="toolbar">
+        <label class="field">直径 <input type="number" id="circleD" min="3" max="64" value="9"></label>
+        <label class="field"><input type="checkbox" id="circleFill"> 塗りつぶし</label>
+        <button class="btn primary" id="circleBtn" type="button">今の段の中央に円を置く</button>
+        <button class="btn" id="towerBtn" type="button">円柱（全段）</button>
+      </div>
+      <p class="note">塔・噴水・円形の部屋などに。今選んでいるブロックで描きます。</p>
+    </div>
+
+    <aside class="side card">
+      <h3>ブロック</h3>
+      <div class="blocks" id="blockList"></div>
+
+      <h3>立体プレビュー</h3>
+      <div class="canvas-box" style="padding:4px"><canvas id="isoCanvas" width="560" height="460"></canvas></div>
+      <div class="toolbar" style="margin-top:6px">
+        <button class="btn" id="rotBtn" type="button">回転</button>
+        <label class="field"><input type="checkbox" id="cutChk"> 今の段まで表示</label>
+      </div>
+
+      <h3>必要ブロック数</h3>
+      <div class="mat-list" id="matList"></div>
+
+      <h3>保存・読み込み</h3>
+      <div class="toolbar">
+        <button class="btn" id="sampleBtn" type="button">サンプルの家</button>
+        <button class="btn" id="exportBtn" type="button">ファイルに保存</button>
+        <button class="btn" id="importBtn" type="button">ファイルを開く</button>
+        <button class="btn" id="newBtn" type="button">すべて消去</button>
+        <input type="file" id="importFile" accept=".json,application/json" hidden>
+      </div>
+    </aside>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>ほかの便利な設計ツール</h3>
+    <ul class="links">
+      <li><strong>Litematica</strong>（Java版Mod）：設計図をワールドに半透明で投影して、その通りに建てられる。建築勢の定番</li>
+      <li><strong>WorldEdit</strong>（Java版Mod/プラグイン）：範囲コピー・貼り付け・一括置換。大型建築に</li>
+      <li><strong>ストラクチャーブロック</strong>（バニラ）：建物を保存して別の場所に読み込める。コマンドで入手</li>
+      <li><strong>Amulet Editor</strong>：ワールドを外部で編集できるエディター（Java/統合版対応）</li>
+      <li><strong>Chunkbase</strong>：シード値から村・要塞・バイオームの位置を地図で確認</li>
+      <li><strong>Plotz</strong> などの円/球ジェネレーター：大きな球やドームの設計に</li>
+    </ul>
+    <p class="note">Modやツールを使うときは、配布元の公式ページから入手し、ワールドのバックアップを取ってから使いましょう。</p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">非公式のファン攻略ページです。Minecraftの仕様はバージョン・エディション（Java版／統合版）で異なる場合があります。</div>
+</footer>
+
+<script>
+(() => {
+"use strict";
+
+/* ---------- テーマ ---------- */
+const root = document.documentElement;
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+};
+const savedTheme = store.get("mc-theme");
+if (savedTheme) root.dataset.theme = savedTheme;
+document.getElementById("themeBtn").addEventListener("click", () => {
+  const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  root.dataset.theme = dark ? "light" : "dark";
+  store.set("mc-theme", root.dataset.theme);
+  drawAll();
+});
+
+/* ---------- タブ ---------- */
+const tabs = document.querySelectorAll("nav.tabs button");
+function showTab(id) {
+  tabs.forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === id)));
+  document.querySelectorAll("section.panel").forEach(s => { s.hidden = s.id !== id; });
+  store.set("mc-tab", id);
+  if (id === "planner") { layoutGrid(); drawAll(); }
+}
+tabs.forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
+
+/* ---------- ブロック定義 ---------- */
+const BLOCKS = [
+  { id: "stone", name: "石", color: "#8a8a8a" },
+  { id: "cobble", name: "丸石", color: "#6e6e6e" },
+  { id: "stonebrick", name: "石レンガ", color: "#7d7d7d" },
+  { id: "deepslate", name: "深層岩タイル", color: "#3e3e45" },
+  { id: "oak", name: "オークの板材", color: "#b8945f" },
+  { id: "spruce", name: "トウヒの板材", color: "#7a5a36" },
+  { id: "darkoak", name: "ダークオークの板材", color: "#4b3220" },
+  { id: "oaklog", name: "オークの原木", color: "#6b5233" },
+  { id: "sprucelog", name: "トウヒの原木", color: "#3f2d1c" },
+  { id: "brick", name: "レンガ", color: "#96503f" },
+  { id: "sandstone", name: "砂岩", color: "#d8cb93" },
+  { id: "quartz", name: "クォーツブロック", color: "#ece6dc" },
+  { id: "white", name: "白のコンクリート", color: "#dfe3e4" },
+  { id: "gray", name: "灰色のコンクリート", color: "#4d5257" },
+  { id: "terracotta", name: "テラコッタ", color: "#985e43" },
+  { id: "glass", name: "ガラス", color: "#a8d8e8", alpha: .45 },
+  { id: "leaves", name: "葉ブロック", color: "#4f8a32" },
+  { id: "grass", name: "草ブロック", color: "#6aa84f" },
+  { id: "water", name: "水", color: "#3f6fd6", alpha: .55 },
+  { id: "lava", name: "溶岩", color: "#e8601c" },
+  { id: "lantern", name: "ランタン", color: "#f4b23c" },
+  { id: "redstone", name: "レッドストーン", color: "#b02012" },
+  { id: "hopper", name: "ホッパー", color: "#4a4a4f" },
+  { id: "chest", name: "チェスト", color: "#a8742a" },
+  { id: "furnace", name: "かまど", color: "#5c5c5c" },
+  { id: "sign", name: "看板", color: "#c8a46a" },
+  { id: "cactus", name: "サボテン", color: "#3f7a2a" },
+  { id: "dropper", name: "ドロッパー", color: "#777" },
+  { id: "player", name: "プレイヤー", color: "#4f7bd1" }
+];
+const BY_ID = Object.fromEntries(BLOCKS.map(b => [b.id, b]));
+const PLACEABLE = BLOCKS.filter(b => !["sign", "player", "hopper", "chest", "furnace", "dropper", "cactus"].includes(b.id));
+
+/* ---------- 図解 ---------- */
+const DIAGRAMS = {
+  lavaTrash: {
+    cap: "横から見た図：看板が溶岩をせき止める",
+    legend: { "#": "stone", L: "lava", s: "sign", P: "player" },
+    rows: ["..###", "P.sL#", "P.###", "#####"]
+  },
+  chestTrash: {
+    cap: "横から見た図：アイテムは左から右へ",
+    legend: { C: "chest", H: "hopper", D: "dropper", K: "cactus", "#": "stone", G: "glass" },
+    rows: ["C....", "HD.K.", "##G##", "#####"]
+  },
+  smelter: {
+    cap: "横から見た図：材料は上、燃料は横、完成品は下",
+    legend: { C: "chest", H: "hopper", F: "furnace" },
+    rows: ["..C", "..H", "CHF", "..H", "..C"]
+  },
+  notGate: {
+    cap: "上から見た図：入力 → ブロック → トーチ → 出力",
+    legend: { R: "redstone", "#": "stone", T: "lantern" },
+    rows: ["RR#TRR"],
+    labels: { T: "T" }
+  }
+};
+document.querySelectorAll("[data-diagram]").forEach(el => {
+  const d = DIAGRAMS[el.dataset.diagram];
+  const grid = document.createElement("div");
+  grid.className = "dgrid";
+  grid.style.gridTemplateColumns = `repeat(${d.rows[0].length}, 24px)`;
+  d.rows.forEach(row => [...row].forEach(ch => {
+    const c = document.createElement("div");
+    c.className = "dcell";
+    const b = BY_ID[d.legend[ch]];
+    if (b) { c.style.background = b.color; c.title = b.name; } else c.classList.add("air");
+    if (d.labels && d.labels[ch]) c.textContent = d.labels[ch];
+    grid.appendChild(c);
+  }));
+  const leg = document.createElement("div");
+  leg.className = "dlegend";
+  Object.entries(d.legend).forEach(([ch, id]) => {
+    const b = BY_ID[id];
+    let name = b.name;
+    if (el.dataset.diagram === "notGate" && id === "lantern") name = "レッドストーントーチ";
+    if (el.dataset.diagram === "notGate" && id === "redstone") name = "レッドストーンダスト";
+    leg.insertAdjacentHTML("beforeend", `<span><i style="background:${b.color}"></i>${name}</span>`);
+  });
+  const cap = document.createElement("div");
+  cap.className = "dcap";
+  cap.textContent = d.cap;
+  el.append(grid, leg, cap);
+});
+document.querySelectorAll("[data-swatch]").forEach(el => {
+  el.dataset.swatch.split(",").forEach(id => {
+    const b = BY_ID[id];
+    el.insertAdjacentHTML("beforeend", `<i style="background:${b.color}" title="${b.name}"></i>`);
+  });
+});
+
+/* ---------- 設計ツール：状態 ---------- */
+let W = 16, D = 16, H = 12;
+let layer = 0;
+let cur = "spruce";
+let tool = "pen";
+let rot = 0;
+let blocks = new Map(); // "x,y,z" -> id
+const undoStack = [], redoStack = [];
+const key = (x, y, z) => x + "," + y + "," + z;
+
+function snapshot() { return JSON.stringify({ W, D, H, b: [...blocks] }); }
+function restore(s) {
+  const o = JSON.parse(s);
+  W = o.W; D = o.D; H = o.H;
+  blocks = new Map(o.b.filter(([, id]) => BY_ID[id]));
+  layer = Math.min(layer, H - 1);
+  syncSizeInputs();
+}
+function pushUndo() {
+  undoStack.push(snapshot());
+  if (undoStack.length > 60) undoStack.shift();
+  redoStack.length = 0;
+}
+function save() { store.set("mc-plan", snapshot()); }
+function commit() { save(); drawAll(); }
+
+function setBlock(x, y, z, id) {
+  if (x < 0 || z < 0 || y < 0 || x >= W || z >= D || y >= H) return;
+  if (id) blocks.set(key(x, y, z), id); else blocks.delete(key(x, y, z));
+}
+
+/* ---------- ブロック一覧 ---------- */
+const blockList = document.getElementById("blockList");
+PLACEABLE.forEach(b => {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "blk";
+  btn.dataset.id = b.id;
+  btn.innerHTML = `<i style="background:${b.color}"></i>${b.name}`;
+  btn.addEventListener("click", () => selectBlock(b.id));
+  blockList.appendChild(btn);
+});
+function selectBlock(id) {
+  cur = id;
+  blockList.querySelectorAll(".blk").forEach(b => b.classList.toggle("on", b.dataset.id === id));
+  if (tool === "erase" || tool === "pick") setTool("pen");
+}
+
+/* ---------- 道具 ---------- */
+const toolBar = document.getElementById("toolBar");
+function setTool(t) {
+  tool = t;
+  toolBar.querySelectorAll("[data-tool]").forEach(b => b.classList.toggle("on", b.dataset.tool === t));
+}
+toolBar.querySelectorAll("[data-tool]").forEach(b => b.addEventListener("click", () => setTool(b.dataset.tool)));
+
+/* ---------- グリッド描画 ---------- */
+const gridCanvas = document.getElementById("gridCanvas");
+const gctx = gridCanvas.getContext("2d");
+const gridBox = document.getElementById("gridBox");
+let cell = 24;
+let dragStart = null, dragEnd = null, hover = null, painting = false, eraseDrag = false;
+
+function css(name) { return getComputedStyle(root).getPropertyValue(name).trim(); }
+
+function layoutGrid() {
+  const avail = Math.max(200, gridBox.clientWidth - 18);
+  cell = Math.max(8, Math.min(32, Math.floor(avail / W)));
+  const dpr = window.devicePixelRatio || 1;
+  gridCanvas.width = W * cell * dpr;
+  gridCanvas.height = D * cell * dpr;
+  gridCanvas.style.width = W * cell + "px";
+  gridCanvas.style.height = D * cell + "px";
+  gctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function shapeCells(a, b, kind) {
+  const out = [];
+  if (kind === "line") {
+    let x0 = a.x, z0 = a.z;
+    const dx = Math.abs(b.x - x0), dz = -Math.abs(b.z - z0);
+    const sx = x0 < b.x ? 1 : -1, sz = z0 < b.z ? 1 : -1;
+    let err = dx + dz;
+    for (;;) {
+      out.push([x0, z0]);
+      if (x0 === b.x && z0 === b.z) break;
+      const e2 = 2 * err;
+      if (e2 >= dz) { err += dz; x0 += sx; }
+      if (e2 <= dx) { err += dx; z0 += sz; }
+    }
+    return out;
+  }
+  const x1 = Math.min(a.x, b.x), x2 = Math.max(a.x, b.x);
+  const z1 = Math.min(a.z, b.z), z2 = Math.max(a.z, b.z);
+  for (let x = x1; x <= x2; x++) for (let z = z1; z <= z2; z++) {
+    if (kind === "frame" && x !== x1 && x !== x2 && z !== z1 && z !== z2) continue;
+    out.push([x, z]);
+  }
+  return out;
+}
+
+function drawGrid() {
+  const w = W * cell, h = D * cell;
+  gctx.clearRect(0, 0, w, h);
+  gctx.fillStyle = css("--grid-bg");
+  gctx.fillRect(0, 0, w, h);
+  const ghost = document.getElementById("ghostChk").checked;
+  if (ghost && layer > 0) {
+    gctx.globalAlpha = .28;
+    for (let x = 0; x < W; x++) for (let z = 0; z < D; z++) {
+      const id = blocks.get(key(x, layer - 1, z));
+      if (id) { gctx.fillStyle = BY_ID[id].color; gctx.fillRect(x * cell, z * cell, cell, cell); }
+    }
+    gctx.globalAlpha = 1;
+  }
+  for (let x = 0; x < W; x++) for (let z = 0; z < D; z++) {
+    const id = blocks.get(key(x, layer, z));
+    if (!id) continue;
+    const b = BY_ID[id];
+    gctx.globalAlpha = b.alpha ? Math.max(.6, b.alpha) : 1;
+    gctx.fillStyle = b.color;
+    gctx.fillRect(x * cell + 1, z * cell + 1, cell - 1, cell - 1);
+    gctx.globalAlpha = 1;
+  }
+  // プレビュー
+  if (dragStart && dragEnd && ["rect", "frame", "line"].includes(tool)) {
+    gctx.globalAlpha = .55;
+    gctx.fillStyle = eraseDrag ? "#d33" : BY_ID[cur].color;
+    shapeCells(dragStart, dragEnd, tool).forEach(([x, z]) => gctx.fillRect(x * cell + 1, z * cell + 1, cell - 1, cell - 1));
+    gctx.globalAlpha = 1;
+  }
+  // 線
+  for (let i = 0; i <= W; i++) {
+    gctx.strokeStyle = (i % 4 === 0 || i === W) ? css("--grid-major") : css("--grid-line");
+    gctx.beginPath(); gctx.moveTo(i * cell + .5, 0); gctx.lineTo(i * cell + .5, h); gctx.stroke();
+  }
+  for (let j = 0; j <= D; j++) {
+    gctx.strokeStyle = (j % 4 === 0 || j === D) ? css("--grid-major") : css("--grid-line");
+    gctx.beginPath(); gctx.moveTo(0, j * cell + .5); gctx.lineTo(w, j * cell + .5); gctx.stroke();
+  }
+  if (hover) {
+    gctx.strokeStyle = css("--accent");
+    gctx.lineWidth = 2;
+    gctx.strokeRect(hover.x * cell + 1, hover.z * cell + 1, cell - 2, cell - 2);
+    gctx.lineWidth = 1;
+  }
+  document.getElementById("layerLabel").textContent = `高さ Y=${layer}（${layer + 1}/${H}段）`;
+}
+
+function cellAt(e) {
+  const r = gridCanvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - r.left) / cell), z = Math.floor((e.clientY - r.top) / cell);
+  if (x < 0 || z < 0 || x >= W || z >= D) return null;
+  return { x, z };
+}
+
+function floodFill(sx, sz, id) {
+  const target = blocks.get(key(sx, layer, sz)) || null;
+  if (target === (id || null)) return;
+  const stack = [[sx, sz]], seen = new Set();
+  while (stack.length) {
+    const [x, z] = stack.pop();
+    if (x < 0 || z < 0 || x >= W || z >= D) continue;
+    const k = x + "," + z;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    if ((blocks.get(key(x, layer, z)) || null) !== target) continue;
+    setBlock(x, layer, z, id);
+    stack.push([x + 1, z], [x - 1, z], [x, z + 1], [x, z - 1]);
+  }
+}
+
+gridCanvas.addEventListener("contextmenu", e => e.preventDefault());
+gridCanvas.addEventListener("pointerdown", e => {
+  const c = cellAt(e);
+  if (!c) return;
+  gridCanvas.setPointerCapture(e.pointerId);
+  eraseDrag = e.button === 2 || tool === "erase";
+  if (tool === "pick") {
+    const id = blocks.get(key(c.x, layer, c.z));
+    if (id && BY_ID[id]) selectBlock(id);
+    return;
+  }
+  pushUndo();
+  if (tool === "fill") { floodFill(c.x, c.z, eraseDrag ? null : cur); commit(); return; }
+  if (tool === "pen" || tool === "erase") {
+    painting = true;
+    setBlock(c.x, layer, c.z, eraseDrag ? null : cur);
+    drawGrid();
+    return;
+  }
+  dragStart = dragEnd = c;
+  drawGrid();
+});
+gridCanvas.addEventListener("pointermove", e => {
+  const c = cellAt(e);
+  hover = c;
+  if (c) {
+    const id = blocks.get(key(c.x, layer, c.z));
+    document.getElementById("status").textContent = `X=${c.x}, Y=${layer}, Z=${c.z}` + (id ? `：${BY_ID[id].name}` : "");
+  }
+  if (painting && c) setBlock(c.x, layer, c.z, eraseDrag ? null : cur);
+  if (dragStart && c) dragEnd = c;
+  drawGrid();
+});
+function endDrag() {
+  if (painting) { painting = false; commit(); }
+  if (dragStart && dragEnd) {
+    shapeCells(dragStart, dragEnd, tool).forEach(([x, z]) => setBlock(x, layer, z, eraseDrag ? null : cur));
+    dragStart = dragEnd = null;
+    commit();
+  }
+}
+gridCanvas.addEventListener("pointerup", endDrag);
+gridCanvas.addEventListener("pointercancel", endDrag);
+gridCanvas.addEventListener("pointerleave", () => { hover = null; if (!painting && !dragStart) drawGrid(); });
+
+/* ---------- 段の操作 ---------- */
+function setLayer(y) { layer = Math.max(0, Math.min(H - 1, y)); drawAll(); }
+document.getElementById("layerUp").addEventListener("click", () => setLayer(layer + 1));
+document.getElementById("layerDown").addEventListener("click", () => setLayer(layer - 1));
+document.getElementById("ghostChk").addEventListener("change", drawGrid);
+document.getElementById("cutChk").addEventListener("change", drawIso);
+document.getElementById("copyDown").addEventListener("click", () => {
+  if (layer === 0) return;
+  pushUndo();
+  for (let x = 0; x < W; x++) for (let z = 0; z < D; z++) setBlock(x, layer, z, blocks.get(key(x, layer - 1, z)) || null);
+  commit();
+});
+document.getElementById("clearLayer").addEventListener("click", () => {
+  pushUndo();
+  for (let x = 0; x < W; x++) for (let z = 0; z < D; z++) setBlock(x, layer, z, null);
+  commit();
+});
+document.addEventListener("keydown", e => {
+  if (document.getElementById("planner").hidden) return;
+  if (e.target.matches("input")) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+  else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); }
+  else if (e.key === "PageUp" || e.key === "e") setLayer(layer + 1);
+  else if (e.key === "PageDown" || e.key === "q") setLayer(layer - 1);
+});
+
+/* ---------- 元に戻す ---------- */
+function undo() { if (!undoStack.length) return; redoStack.push(snapshot()); restore(undoStack.pop()); layoutGrid(); commit(); }
+function redo() { if (!redoStack.length) return; undoStack.push(snapshot()); restore(redoStack.pop()); layoutGrid(); commit(); }
+document.getElementById("undoBtn").addEventListener("click", undo);
+document.getElementById("redoBtn").addEventListener("click", redo);
+
+/* ---------- サイズ ---------- */
+const clampN = (v, lo, hi, d) => { v = parseInt(v, 10); return isNaN(v) ? d : Math.max(lo, Math.min(hi, v)); };
+function syncSizeInputs() {
+  document.getElementById("sizeW").value = W;
+  document.getElementById("sizeD").value = D;
+  document.getElementById("sizeH").value = H;
+}
+document.getElementById("resizeBtn").addEventListener("click", () => {
+  pushUndo();
+  W = clampN(document.getElementById("sizeW").value, 4, 64, W);
+  D = clampN(document.getElementById("sizeD").value, 4, 64, D);
+  H = clampN(document.getElementById("sizeH").value, 1, 64, H);
+  for (const k of [...blocks.keys()]) {
+    const [x, y, z] = k.split(",").map(Number);
+    if (x >= W || y >= H || z >= D) blocks.delete(k);
+  }
+  layer = Math.min(layer, H - 1);
+  syncSizeInputs();
+  layoutGrid();
+  commit();
+});
+
+/* ---------- 円ジェネレーター ---------- */
+function circleCells(d, filled) {
+  const r = d / 2, inside = (i, j) => {
+    const dx = i + .5 - r, dz = j + .5 - r;
+    return dx * dx + dz * dz <= r * r;
+  };
+  const out = [];
+  for (let i = 0; i < d; i++) for (let j = 0; j < d; j++) {
+    if (!inside(i, j)) continue;
+    if (!filled && inside(i + 1, j) && inside(i - 1, j) && inside(i, j + 1) && inside(i, j - 1)) continue;
+    out.push([i, j]);
+  }
+  return out;
+}
+function placeCircle(ys) {
+  const d = clampN(document.getElementById("circleD").value, 3, 64, 9);
+  if (d > W || d > D) {
+    W = Math.max(W, d); D = Math.max(D, d);
+    syncSizeInputs(); layoutGrid();
+  }
+  const ox = Math.floor((W - d) / 2), oz = Math.floor((D - d) / 2);
+  const cells = circleCells(d, document.getElementById("circleFill").checked);
+  ys.forEach(y => cells.forEach(([i, j]) => setBlock(ox + i, y, oz + j, cur)));
+}
+document.getElementById("circleBtn").addEventListener("click", () => { pushUndo(); placeCircle([layer]); commit(); });
+document.getElementById("towerBtn").addEventListener("click", () => {
+  pushUndo();
+  placeCircle(Array.from({ length: H }, (_, i) => i));
+  commit();
+});
+
+/* ---------- サンプルの家 ---------- */
+function buildSample() {
+  W = 16; D = 16; H = 11;
+  blocks = new Map();
+  const x0 = 2, z0 = 3, hw = 11, hd = 9; // 11 x 9
+  const X1 = x0 + hw - 1, Z1 = z0 + hd - 1;
+  // 地面
+  for (let x = 0; x < W; x++) for (let z = 0; z < D; z++) setBlock(x, 0, z, "grass");
+  // 基礎
+  for (let x = x0; x <= X1; x++) for (let z = z0; z <= Z1; z++) setBlock(x, 1, z, "cobble");
+  // 壁
+  const midX = x0 + Math.floor(hw / 2);
+  for (let y = 2; y <= 4; y++) {
+    for (let x = x0; x <= X1; x++) for (let z = z0; z <= Z1; z++) {
+      const edgeX = x === x0 || x === X1, edgeZ = z === z0 || z === Z1;
+      if (!edgeX && !edgeZ) continue;
+      const pillar = (edgeX && edgeZ) || (edgeZ && (x - x0) % 5 === 0) || (edgeX && (z - z0) % 4 === 0);
+      let id = pillar ? "sprucelog" : "spruce";
+      if (!pillar && y === 3) id = "glass";
+      if (edgeZ && z === Z1 && x === midX && y <= 3) id = null; // ドア
+      if (id) setBlock(x, y, z, id);
+    }
+  }
+  // 梁
+  for (let x = x0; x <= X1; x++) { setBlock(x, 5, z0, "sprucelog"); setBlock(x, 5, Z1, "sprucelog"); }
+  for (let z = z0; z <= Z1; z++) { setBlock(x0, 5, z, "sprucelog"); setBlock(X1, 5, z, "sprucelog"); }
+  // 屋根（短辺方向に傾斜、1マス張り出し）
+  for (let k = 0; ; k++) {
+    const y = 5 + k, za = z0 - 1 + k, zb = Z1 + 1 - k;
+    if (za > zb || y >= H) break;
+    for (let x = x0 - 1; x <= X1 + 1; x++) { setBlock(x, y, za, "darkoak"); setBlock(x, y, zb, "darkoak"); }
+    for (let z = za + 1; z < zb; z++) { setBlock(x0, y, z, "white"); setBlock(X1, y, z, "white"); }
+  }
+  // 照明と植え込み
+  setBlock(midX - 1, 3, Z1 + 1, "lantern");
+  setBlock(midX + 1, 3, Z1 + 1, "lantern");
+  [x0 + 1, x0 + 2, X1 - 1, X1 - 2].forEach(x => setBlock(x, 1, Z1 + 1, "leaves"));
+  for (let z = Z1 + 1; z < D; z++) setBlock(midX, 0, z, "stonebrick");
+  layer = 2;
+  syncSizeInputs();
+}
+document.getElementById("sampleBtn").addEventListener("click", () => {
+  pushUndo(); buildSample(); layoutGrid(); commit();
+});
+document.getElementById("newBtn").addEventListener("click", () => {
+  if (!confirm("設計をすべて消去しますか？（元に戻すで復元できます）")) return;
+  pushUndo(); blocks = new Map(); layer = 0; commit();
+});
+
+/* ---------- 保存・読み込み ---------- */
+document.getElementById("exportBtn").addEventListener("click", () => {
+  const blob = new Blob([snapshot()], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "minecraft-plan.json";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+const importFile = document.getElementById("importFile");
+document.getElementById("importBtn").addEventListener("click", () => importFile.click());
+importFile.addEventListener("change", async () => {
+  const f = importFile.files[0];
+  if (!f) return;
+  try {
+    const text = await f.text();
+    const o = JSON.parse(text);
+    if (!o || !Array.isArray(o.b)) throw new Error("bad");
+    pushUndo();
+    o.W = clampN(o.W, 4, 64, 16); o.D = clampN(o.D, 4, 64, 16); o.H = clampN(o.H, 1, 64, 12);
+    restore(JSON.stringify(o));
+    layoutGrid(); commit();
+  } catch (e) {
+    alert("読み込めませんでした。このツールで保存したファイルを選んでください。");
+  }
+  importFile.value = "";
+});
+
+/* ---------- 立体プレビュー ---------- */
+const iso = document.getElementById("isoCanvas");
+const ictx = iso.getContext("2d");
+document.getElementById("rotBtn").addEventListener("click", () => { rot = (rot + 1) % 4; drawIso(); });
+
+function shade(hex, f) {
+  const n = parseInt(hex.slice(1).padEnd(6, hex.slice(1)), 16);
+  let r = n >> 16 & 255, g = n >> 8 & 255, b = n & 255;
+  if (hex.length === 4) { r = parseInt(hex[1] + hex[1], 16); g = parseInt(hex[2] + hex[2], 16); b = parseInt(hex[3] + hex[3], 16); }
+  return `rgb(${Math.round(r * f)},${Math.round(g * f)},${Math.round(b * f)})`;
+}
+function rotXZ(x, z) {
+  switch (rot) {
+    case 1: return [D - 1 - z, x];
+    case 2: return [W - 1 - x, D - 1 - z];
+    case 3: return [z, W - 1 - x];
+    default: return [x, z];
+  }
+}
+function drawIso() {
+  const cw = iso.width, ch = iso.height;
+  ictx.clearRect(0, 0, cw, ch);
+  ictx.fillStyle = css("--grid-bg");
+  ictx.fillRect(0, 0, cw, ch);
+  const RW = rot % 2 ? D : W, RD = rot % 2 ? W : D;
+  const s = Math.min(cw / (RW + RD) * 0.95, ch / ((RW + RD) / 2 + H) * 0.9);
+  const ox = cw / 2 - (RW - RD) * s / 2;
+  const oy = (ch - ((RW + RD) / 2 + H) * s) / 2 + H * s;
+  const P = (x, y, z) => [ox + (x - z) * s, oy + (x + z) * s / 2 - y * s];
+
+  // 床の輪郭
+  ictx.strokeStyle = css("--grid-major");
+  ictx.beginPath();
+  [[0, 0], [RW, 0], [RW, RD], [0, RD], [0, 0]].forEach(([x, z], i) => { const [px, py] = P(x, 0, z); i ? ictx.lineTo(px, py) : ictx.moveTo(px, py); });
+  ictx.stroke();
+
+  const cut = document.getElementById("cutChk").checked;
+  const list = [];
+  const occ = new Set();
+  for (const [k, id] of blocks) {
+    const [x, y, z] = k.split(",").map(Number);
+    if (cut && y > layer) continue;
+    const [rx, rz] = rotXZ(x, z);
+    list.push([rx, y, rz, id]);
+    if (!BY_ID[id].alpha) occ.add(rx + "," + y + "," + rz);
+  }
+  list.sort((a, b) => (a[0] + a[1] + a[2]) - (b[0] + b[1] + b[2]) || a[1] - b[1]);
+  const poly = (pts, fill) => {
+    ictx.fillStyle = fill;
+    ictx.beginPath();
+    pts.forEach(([x, y, z], i) => { const [px, py] = P(x, y, z); i ? ictx.lineTo(px, py) : ictx.moveTo(px, py); });
+    ictx.closePath();
+    ictx.fill();
+    if (s > 5) ictx.stroke();
+  };
+  ictx.strokeStyle = "rgba(0,0,0,.18)";
+  ictx.lineWidth = .6;
+  for (const [x, y, z, id] of list) {
+    const b = BY_ID[id];
+    ictx.globalAlpha = b.alpha || 1;
+    if (!occ.has(x + "," + (y + 1) + "," + z))
+      poly([[x, y + 1, z], [x + 1, y + 1, z], [x + 1, y + 1, z + 1], [x, y + 1, z + 1]], shade(b.color, 1));
+    if (!occ.has((x + 1) + "," + y + "," + z))
+      poly([[x + 1, y, z], [x + 1, y + 1, z], [x + 1, y + 1, z + 1], [x + 1, y, z + 1]], shade(b.color, .78));
+    if (!occ.has(x + "," + y + "," + (z + 1)))
+      poly([[x, y, z + 1], [x + 1, y, z + 1], [x + 1, y + 1, z + 1], [x, y + 1, z + 1]], shade(b.color, .62));
+  }
+  ictx.globalAlpha = 1;
+  ictx.lineWidth = 1;
+}
+
+/* ---------- 必要ブロック数 ---------- */
+function drawMaterials() {
+  const counts = {};
+  for (const id of blocks.values()) counts[id] = (counts[id] || 0) + 1;
+  const rows = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const el = document.getElementById("matList");
+  if (!rows.length) { el.innerHTML = '<p class="status">まだブロックがありません。</p>'; return; }
+  const total = rows.reduce((s, r) => s + r[1], 0);
+  const fmt = n => {
+    const st = Math.floor(n / 64), rem = n % 64;
+    return st ? `${st}st${rem ? "+" + rem : ""}` : `${rem}`;
+  };
+  el.innerHTML = `<table><tr><th>ブロック</th><th>個数</th><th>スタック</th></tr>` +
+    rows.map(([id, n]) => `<tr><td><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${BY_ID[id].color};margin-right:5px"></span>${BY_ID[id].name}</td><td>${n}</td><td>${fmt(n)}</td></tr>`).join("") +
+    `<tr><td><strong>合計</strong></td><td><strong>${total}</strong></td><td>${(total / (64 * 27)).toFixed(1)} チェスト分</td></tr></table>`;
+}
+
+function drawAll() {
+  if (document.getElementById("planner").hidden) return;
+  drawGrid(); drawIso(); drawMaterials();
+}
+
+/* ---------- 起動 ---------- */
+const saved = store.get("mc-plan");
+let loaded = false;
+if (saved) { try { restore(saved); loaded = true; } catch (e) {} }
+if (!loaded) buildSample();
+syncSizeInputs();
+selectBlock(cur);
+window.addEventListener("resize", () => { if (!document.getElementById("planner").hidden) { layoutGrid(); drawGrid(); } });
+const startTab = store.get("mc-tab");
+showTab(["devices", "circuits", "building", "planner"].includes(startTab) ? startTab : "devices");
+})();
+</script>
+</body>
+</html>
