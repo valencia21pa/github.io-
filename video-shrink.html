@@ -66,7 +66,7 @@ video, canvas { max-width: 100%; border-radius: 8px; background: #000; }
 
 <header>
   <h1>動画シュリンク</h1>
-  <p>対戦リプレイの録画を、ブラウザだけで軽くする。ファイルはどこにも送信されません。</p>
+  <p>対戦リプレイの録画を軽くして、そのまま分析用にアップロードする。圧縮はブラウザ内だけで行われます。</p>
 </header>
 
 <main>
@@ -117,6 +117,10 @@ video, canvas { max-width: 100%; border-radius: 8px; background: #000; }
         </div>
       </div>
     </div>
+    <div class="row" id="directRow" style="margin-top:10px" hidden>
+      <button id="directUpload">圧縮せずにそのままアップロード</button>
+      <span class="muted">20MB以下なので圧縮なしでも送れます</span>
+    </div>
     <p class="tip" style="margin-top:12px">処理は<b>実時間</b>で進みます（3分の動画なら約3分）。タブを前面にしたままにしてください。裏に回すとブラウザが描画を止めて、途中でコマが抜けます。</p>
     <div class="row" style="margin-top:12px">
       <button class="primary" id="run">圧縮を開始</button>
@@ -137,10 +141,25 @@ video, canvas { max-width: 100%; border-radius: 8px; background: #000; }
     <div class="stat" id="resultStat"></div>
     <video id="out" controls playsinline style="margin-top:10px"></video>
     <div class="row" style="margin-top:12px">
-      <button class="primary" id="save">保存する</button>
+      <button id="save">ファイルとして保存</button>
       <span id="saveMsg" class="muted"></span>
     </div>
-    <p class="muted" style="margin-top:8px">保存したファイルを分析用のチャットにアップロードしてください。</p>
+  </section>
+
+  <section class="card" id="uploadCard" hidden>
+    <h2>分析用にアップロード</h2>
+    <div class="grid">
+      <label class="field">自キャラ<input type="text" id="upMine" value="A.B.A"></label>
+      <label class="field">相手キャラ<input type="text" id="upOpp" placeholder="例：ソル"></label>
+    </div>
+    <label class="field" style="margin-top:8px">見てほしい点（任意）<input type="text" id="upNote" placeholder="例：2R目の壁際で毎回投げられる"></label>
+    <div class="row" style="margin-top:10px">
+      <button class="primary" id="upload">アップロード</button>
+      <span id="upMsg" class="muted"></span>
+    </div>
+    <div class="progress" id="upProgress" hidden><div style="width:100%"></div></div>
+    <p class="muted" id="upHint" style="margin-top:8px">アップロード後、チャットで「アップした」と伝えてください。Claude がこのページの保管庫から取り出して分析します。1ファイル 20MB まで。</p>
+    <div id="upList" style="margin-top:10px"></div>
   </section>
 </main>
 
@@ -151,6 +170,8 @@ video, canvas { max-width: 100%; border-radius: 8px; background: #000; }
   const fmtT = s => { s = Math.max(0, s); const m = Math.floor(s / 60), r = s - m * 60; return `${m}:${r.toFixed(1).padStart(4, "0")}`; };
 
   let file = null, meta = null, outBlob = null, outExt = "webm", aborted = false, recorder = null;
+  let pending = null; // アップロード候補 { blob, name, ext }
+  const LIMIT = 20 * 1048576;
   const src = $("src"), canvas = $("canvas"), ctx = canvas.getContext("2d", { alpha: false });
 
   // ---- ファイル読み込み ----
@@ -174,6 +195,8 @@ video, canvas { max-width: 100%; border-radius: 8px; background: #000; }
       [...$("height").options].forEach(o => o.disabled = +o.value > meta.h);
       if (+$("height").value > meta.h) $("height").value = [...$("height").options].find(o => !o.disabled)?.value || "360";
       $("settings").hidden = false; $("preview").hidden = false;
+      $("directRow").hidden = !(f.size <= LIMIT && /^(video\/mp4|video\/webm)$/.test(f.type));
+      $("uploadCard").hidden = true;
       src.currentTime = 0;
       src.onseeked = () => { drawFrame(); src.onseeked = null; };
       update();
@@ -204,6 +227,8 @@ video, canvas { max-width: 100%; border-radius: 8px; background: #000; }
     const { w, h } = targetSize();
     $("estimate").innerHTML = `約 ${fmtMB(bytes)} <small>（${w}×${h}・${$("fps").value}fps・${fmtT(len)}）</small>`;
     $("estimateNote").textContent = meta.size ? `元の ${fmtMB(meta.size)} の約 ${Math.max(1, Math.round(bytes / meta.size * 100))}%。処理時間はおよそ ${fmtT(len)}` : "";
+    $("estimate").className = "estimate" + (bytes > LIMIT ? " err" : "");
+    if (bytes > LIMIT) $("estimateNote").textContent += "　／　20MB を超えます。範囲を狭めるか画質を下げてください";
   }
   ["height", "fps", "bitrate", "audio", "start", "end"].forEach(id => $(id).addEventListener("input", update));
   $("start").addEventListener("input", () => { if (+$("start").value > +$("end").value - 1) $("end").value = Math.min(meta.duration, +$("start").value + 1); seekPreview(+$("start").value); });
@@ -288,9 +313,59 @@ video, canvas { max-width: 100%; border-radius: 8px; background: #000; }
     $("resultStat").innerHTML = `<span>出力サイズ</span><b class="ok">${fmtMB(outBlob.size)}</b><span>元のサイズ</span><b>${fmtMB(meta.size)}（${ratio}%に）</b><span>形式</span><b>${ext}・${w}×${h}・${fps}fps</b><span>長さ</span><b>${fmtT(len)}</b>`;
     const out = $("out"); if (out.src) URL.revokeObjectURL(out.src); out.src = URL.createObjectURL(outBlob);
     $("result").hidden = false; $("saveMsg").textContent = "";
+    offerUpload(outBlob, (file.name.replace(/\.[^.]+$/, "") || "video") + "_small." + ext, ext);
     $("result").scrollIntoView({ behavior: "smooth", block: "start" });
   });
   $("cancel").addEventListener("click", () => { aborted = true; });
+
+  // ---- アップロード（アーティファクトの保管庫 + 記録） ----
+  let assetsNs = null, dbNs = null;
+  (async () => {
+    if (!window.claude?.use) return;
+    [assetsNs, dbNs] = await Promise.all([claude.use("assets"), claude.use("db")]);
+    if (!dbNs) return;
+    try {
+      dbNs.collection("uploads").orderBy("createdAt", "desc").limit(10).onSnapshot(snap => {
+        const rows = snap.docs.map(d => d.data());
+        $("upList").innerHTML = rows.length ? `<div class="muted">これまでのアップロード</div><ul style="margin:4px 0;padding-left:1.2em">${rows.map(r =>
+          `<li>${esc(r.createdAt?.slice(0, 16).replace("T", " ") || "")}　${esc(r.mine || "")} vs ${esc(r.opp || "")}　${esc(r.name || "")}（${fmtMB(r.sizeBytes || 0)}）${r.analyzed ? " <span class='ok'>分析済</span>" : ""}</li>`).join("")}</ul>` : "";
+      });
+    } catch (_) {}
+  })();
+  function offerUpload(blob, name, ext) {
+    pending = { blob, name, ext };
+    const card = $("uploadCard");
+    if (!window.claude?.use) { card.hidden = true; return; }
+    card.hidden = false;
+    $("upMsg").textContent = blob.size > LIMIT ? `${fmtMB(blob.size)} は 20MB を超えています。範囲を狭めるか画質を下げて圧縮し直してください` : `${esc(name)}（${fmtMB(blob.size)}）を送れます`;
+    $("upMsg").className = blob.size > LIMIT ? "err" : "muted";
+    $("upload").disabled = blob.size > LIMIT;
+  }
+  $("directUpload").addEventListener("click", () => { offerUpload(file, file.name, file.type === "video/mp4" ? "mp4" : "webm"); $("uploadCard").scrollIntoView({ behavior: "smooth", block: "start" }); });
+  $("upload").addEventListener("click", async () => {
+    if (!pending || pending.blob.size > LIMIT) return;
+    if (!assetsNs) { $("upMsg").textContent = "このビューではアップロードできません（編集権限のあるアカウントで開いてください）"; $("upMsg").className = "err"; return; }
+    $("upload").disabled = true; $("upProgress").hidden = false; $("upMsg").className = "muted"; $("upMsg").textContent = "アップロード中…";
+    try {
+      const type = pending.ext === "mp4" ? "video/mp4" : "video/webm";
+      const res = await assetsNs.upload(pending.blob, { type });
+      const rec = { asset: res.id, name: pending.name, sizeBytes: res.sizeBytes, contentType: res.contentType,
+        mine: $("upMine").value.trim(), opp: $("upOpp").value.trim(), note: $("upNote").value.trim(),
+        createdAt: new Date().toISOString(), analyzed: false };
+      if (dbNs) await dbNs.collection("uploads").add(rec);
+      $("upMsg").innerHTML = `<span class="ok">アップロード完了</span>　チャットで「アップした」と伝えてください`;
+      pending = null;
+    } catch (err) {
+      const code = err?.code || "";
+      $("upMsg").className = "err";
+      $("upMsg").textContent = code === "too_large" ? "20MB を超えています。圧縮し直してください"
+        : code === "quota_or_state" ? "保管庫がいっぱいです。古いファイルを Claude に消してもらってから再度どうぞ"
+        : code === "rate_limited" ? "少し待ってからもう一度押してください"
+        : "アップロードできませんでした：" + (err?.message || code || err);
+      $("upload").disabled = false;
+    }
+    $("upProgress").hidden = true;
+  });
 
   // ---- 保存 ----
   $("save").addEventListener("click", async () => {
@@ -314,4 +389,6 @@ video, canvas { max-width: 100%; border-radius: 8px; background: #000; }
   if (!window.MediaRecorder) setStatus("このブラウザは動画の書き出しに対応していません。Chrome / Edge / Firefox で開いてください。", true);
 })();
 </script>
-</body></html>
+
+</body>
+</html>
