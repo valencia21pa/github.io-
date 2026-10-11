@@ -362,28 +362,28 @@ function renderFramesStatus() {
 // ---- 練習タブ ----
 const norm = (t) => typeof t === "string" ? { title: t } : t;
 function drillsFor(oppId, d) {
-  const base = COMMON_DRILLS.map((t, i) => ({ id: "c" + i, ...norm(t) }))
-    .concat((CHAR_DRILLS[oppId] || []).map((t, i) => ({ id: "k" + i, ...norm(t) })));
-  // customDrills は文字列（自分で追加）か、{title, record, action, pass, from}（動画分析から追加）
-  return base.concat(d.customDrills.map((t, i) => ({ id: "u" + i, ...norm(t), custom: true })));
+  // 並び: 動画分析から追加 → キャラ固有 → 自分で追加 → 共通（折りたたみ）
+  const custom = d.customDrills.map((t, i) => ({ id: "u" + i, ...norm(t), custom: true }));
+  const fromAnalysis = custom.filter(x => x.from), own = custom.filter(x => !x.from);
+  const char = (CHAR_DRILLS[oppId] || []).map((t, i) => ({ id: "k" + i, ...norm(t) }));
+  const common = COMMON_DRILLS.map((t, i) => ({ id: "c" + i, ...norm(t), common: true }));
+  return fromAnalysis.concat(char, own, common);
 }
+// 進捗は共通項目を除いて数える
 function drillProgress(mine, opp) {
   const d = state.pairs[pairKeyOf(mine, opp)];
-  const items = drillsFor(opp, d || { customDrills: [] });
+  const items = drillsFor(opp, d || { customDrills: [] }).filter(it => !it.common);
   const done = d ? items.filter(it => d.drills && d.drills[it.id]).length : 0;
   return { done, total: items.length };
 }
-function renderDrills() {
-  const opp = charById(state.opp), d = pairData();
-  $("drillsTitle").textContent = `${opp.name} 対策の練習メニュー`;
-  const items = drillsFor(opp.id, d);
-  const done = items.filter(it => d.drills[it.id]).length;
-  $("drillsBar").style.width = items.length ? (done / items.length * 100) + "%" : "0";
-  $("drillsList").innerHTML = items.map(it => `
+const fmtAdded = v => v ? v.slice(5).replace("-", "/") : "";
+function drillItem(it, d) {
+  const meta = [it.from ? `<span class="tag neutral">${esc(it.from)}</span>` : "", it.added ? `<span class="muted small">追加 ${esc(fmtAdded(it.added))}</span>` : ""].filter(Boolean).join(" ");
+  return `
     <li class="${d.drills[it.id] ? "done" : ""}">
       <input type="checkbox" id="dr-${it.id}" data-drill="${it.id}" ${d.drills[it.id] ? "checked" : ""}>
       <div class="drill">
-        <label for="dr-${it.id}">${esc(it.title)}${it.from ? ` <span class="tag neutral">${esc(it.from)}</span>` : ""}</label>
+        <label for="dr-${it.id}">${esc(it.title)}${meta ? " " + meta : ""}</label>
         ${it.record ? `<dl class="drill-steps">
           <dt>記録</dt><dd>${esc(it.record)}</dd>
           <dt>やる</dt><dd>${esc(it.action)}</dd>
@@ -391,7 +391,23 @@ function renderDrills() {
         </dl>` : ""}
       </div>
       ${it.custom ? `<button class="small" data-deldrill="${it.id.slice(1)}">×</button>` : ""}
-    </li>`).join("");
+    </li>`;
+}
+function renderDrills() {
+  const opp = charById(state.opp), d = pairData();
+  $("drillsTitle").textContent = `${opp.name} 対策の練習メニュー`;
+  const all = drillsFor(opp.id, d);
+  const main = all.filter(it => !it.common), common = all.filter(it => it.common);
+  const done = main.filter(it => d.drills[it.id]).length;
+  $("drillsBar").style.width = main.length ? (done / main.length * 100) + "%" : "0";
+  $("drillsCount").textContent = `${done} / ${main.length}`;
+  $("drillsList").innerHTML = main.map(it => drillItem(it, d)).join("") || "<li class='muted'>このキャラ固有の練習はまだありません</li>";
+  const cdone = common.filter(it => d.drills[it.id]).length;
+  $("commonDrills").innerHTML = `
+    <details class="guide">
+      <summary><span class="g-icon">共</span>どのキャラにも効く基礎練習<span class="muted g-count">${cdone}/${common.length}</span></summary>
+      <ul class="checklist">${common.map(it => drillItem(it, d)).join("")}</ul>
+    </details>`;
 }
 
 // ---- 試合ログ ----
@@ -571,12 +587,12 @@ $("framesBody").addEventListener("change", e => {
 });
 
 // 練習
-$("drillsList").addEventListener("change", e => {
+$("tab-drills").addEventListener("change", e => {
   const id = e.target.dataset.drill; if (!id) return;
   const d = pairData(); if (e.target.checked) d.drills[id] = true; else delete d.drills[id];
   save(true); renderDrills();
 });
-$("drillsList").addEventListener("click", e => {
+$("tab-drills").addEventListener("click", e => {
   const i = e.target.dataset.deldrill; if (i == null) return;
   const d = pairData(); d.customDrills.splice(+i, 1);
   // 以降のカスタム項目のチェック状態がずれるので詰め直す
@@ -585,7 +601,7 @@ $("drillsList").addEventListener("click", e => {
 });
 $("addDrill").addEventListener("click", () => {
   const t = $("newDrill").value.trim(); if (!t) return;
-  pairData().customDrills.push(t); $("newDrill").value = ""; save(true); renderDrills();
+  pairData().customDrills.push({ title: t, added: today() }); $("newDrill").value = ""; save(true); renderDrills();
 });
 $("drillsReset").addEventListener("click", () => { pairData().drills = {}; save(true); renderDrills(); });
 

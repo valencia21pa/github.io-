@@ -178,3 +178,5 @@ footer a { color: inherit; }
 
 .nowrap { white-space: nowrap; }
 .cloud.ok { color: var(--win); } .cloud.err { color: var(--lose); }
+.small { font-size: .78rem; }
+#commonDrills details.guide { border-top: none; background: var(--panel-2); border-radius: 8px; padding: 0 10px; }
