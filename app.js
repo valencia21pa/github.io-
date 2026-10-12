@@ -17,7 +17,7 @@ const CAUSES = [
 const DL_URL = 'https://www.dustloop.com/wiki/api.php?action=cargoquery&tables=MoveData_GGST&fields=chara,name,input,startup,active,recovery,onBlock,onHit,guard,level&where=chara%3D%22A.B.A%22&limit=500&format=json';
 
 const STORE_KEY = "ggst-matchup-v1";
-const DEFAULT_STATE = () => ({ mine: "aba", opp: "sol", custom: [], pairs: {}, log: [], frames: {}, puddle: [], puddleMeta: {} });
+const DEFAULT_STATE = () => ({ mine: "aba", opp: "sol", custom: [], pairs: {}, log: [], frames: {}, puddle: [], puddleMeta: {}, globalDrills: [], globalChecks: {} });
 
 // Puddle Farm のキャラ略号 → このツールの id
 const PUDDLE_CODES = { SO: "sol", KY: "ky", MA: "may", AX: "axl", CH: "chipp", PO: "potemkin", FA: "faust", MI: "millia", ZA: "zato", RA: "ramlethal", LE: "leo", NA: "nagoriyuki", GI: "giovanna", AN: "anji", IN: "ino", GO: "goldlewis", JC: "jacko", HA: "chaos", BA: "baiken", TE: "testament", BI: "bridget", SI: "sin", BE: "bedman", AS: "asuka", JN: "johnny", EL: "elphelt", AB: "aba", SL: "slayer", DI: "dizzy", VE: "venom", UN: "unika", LU: "lucy", JA: "jam", RK: "roboky" };
@@ -48,7 +48,7 @@ function save(showMark) {
 // ---- クラウド保存（アーティファクトの db）----
 // ブラウザ内保存（localStorage）はアプリ側の都合で消えることがあるので、
 // アーティファクト上では db にも同じ内容を保存し、起動時に新しい方を採用する
-const SYNC_KEYS = ["mine", "opp", "custom", "pairs", "log", "puddle", "puddleMeta", "updatedAt"];
+const SYNC_KEYS = ["mine", "opp", "custom", "pairs", "log", "puddle", "puddleMeta", "globalDrills", "globalChecks", "updatedAt"];
 let cloudDoc = null, cloudTimer = null, cloudBusy = false, cloudDirty = false, cloudState = "off";
 function setCloud(s, msg) { cloudState = s; const el = $("cloudStatus"); if (el) { el.textContent = msg; el.className = "muted cloud " + s; } }
 function pickSync(src) { const o = {}; for (const k of SYNC_KEYS) if (src[k] !== undefined) o[k] = src[k]; return o; }
@@ -393,7 +393,18 @@ function drillItem(it, d) {
       ${it.custom ? `<button class="small" data-deldrill="${it.id.slice(1)}">×</button>` : ""}
     </li>`;
 }
+// 全キャラ共通の自分の課題（どの相手でも上に出る）
+function renderGlobalDrills() {
+  const g = state.globalDrills || [], ch = state.globalChecks || {};
+  const box = $("globalDrills");
+  if (!g.length) { box.innerHTML = ""; return; }
+  const done = g.filter((_, i) => ch["g" + i]).length;
+  box.innerHTML = `
+    <div class="row between"><h3 style="margin:0">自分の課題（全キャラ共通）</h3><span class="muted">${done} / ${g.length}</span></div>
+    <ul class="checklist">${g.map((t, i) => drillItem({ id: "g" + i, ...norm(t) }, { drills: ch })).join("")}</ul>`;
+}
 function renderDrills() {
+  renderGlobalDrills();
   const opp = charById(state.opp), d = pairData();
   $("drillsTitle").textContent = `${opp.name} 対策の練習メニュー`;
   const all = drillsFor(opp.id, d);
@@ -589,6 +600,11 @@ $("framesBody").addEventListener("change", e => {
 // 練習
 $("tab-drills").addEventListener("change", e => {
   const id = e.target.dataset.drill; if (!id) return;
+  if (id.startsWith("g")) {
+    state.globalChecks = state.globalChecks || {};
+    if (e.target.checked) state.globalChecks[id] = true; else delete state.globalChecks[id];
+    save(true); renderDrills(); return;
+  }
   const d = pairData(); if (e.target.checked) d.drills[id] = true; else delete d.drills[id];
   save(true); renderDrills();
 });
