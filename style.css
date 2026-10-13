@@ -181,3 +181,16 @@ footer a { color: inherit; }
 .small { font-size: .78rem; }
 #commonDrills details.guide { border-top: none; background: var(--panel-2); border-radius: 8px; padding: 0 10px; }
 #globalDrillsCard:has(#globalDrills:empty) { display: none; }
+
+.vid-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; margin-top: 8px; }
+@media (max-width: 760px) { .vid-layout { grid-template-columns: 1fr; } }
+.vid-player video { width: 100%; max-width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 8px; }
+.vid-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 520px; overflow-y: auto; }
+.vid-list li { display: flex; gap: 8px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; background: var(--panel); }
+.vid-list li.on { border-color: var(--accent); background: var(--accent-soft); }
+.vid-list li:hover { background: var(--chip); }
+.markers { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; }
+.markers li { display: flex; gap: 8px; align-items: baseline; }
+.markers .mk { font-variant-numeric: tabular-nums; min-width: 4.2em; }
+.mk.bad { border-color: var(--lose); color: var(--lose); }
+.mk.good { border-color: var(--win); color: var(--win); }

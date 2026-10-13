@@ -443,7 +443,7 @@ function renderLogTable() {
       <td class="${g.result === "W" ? "win" : "lose"}"><b>${g.result === "W" ? "勝" : "負"}</b>${g.score ? ` <small class="muted">${esc(g.score)}</small>` : ""}</td>
       <td class="causes">${g.source === "puddle" ? `<span class="muted">${esc(g.oppName)} ${g.oppRating ? g.oppRating.toLocaleString() + "RP" : ""} ${g.change != null ? (g.change >= 0 ? "+" : "") + g.change : ""}</span>` : (g.causes || []).map(esc).join("、")}</td>
       <td class="muted">${esc(g.memo || "")}</td>
-      <td class="nowrap">${g.source === "puddle" ? "" : `<button class="small" data-editlog="${esc(g.id)}">編集</button> <button class="small" data-dellog="${esc(g.id)}">×</button>`}</td>
+      <td class="nowrap">${g.video ? `<button class="small" data-openvid="${esc(g.video)}">▶動画</button> ` : ""}${g.source === "puddle" ? "" : `<button class="small" data-editlog="${esc(g.id)}">編集</button> <button class="small" data-dellog="${esc(g.id)}">×</button>`}</td>
     </tr>`).join("") : "<tr><td colspan='7' class='muted'>まだ記録がありません</td></tr>";
 }
 function addGame(result, causes = [], memo = "", date = today()) {
@@ -540,8 +540,86 @@ function renderCustom() {
   renderFramesStatus(); renderPuddleStatus();
 }
 
+// ---- 動画 ----
+// db の videos コレクション: { asset, title, mine, opp, date, kind: "self"|"ref", summary, markers:[{t,label,kind}] }
+// kind: good(良い動き) / bad(失点・ミス) / info
+let videos = [], vidCurrent = null, assetsNs2 = null;
+const fmtSec = s => { s = Math.max(0, +s || 0); return Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0"); };
+async function videosInit() {
+  if (!window.claude?.use) { $("vidStatus").textContent = "この表示では動画を読み込めません（アーティファクトとして開いてください）"; return; }
+  const db = await claude.use("db");
+  assetsNs2 = await claude.use("assets");
+  $("vidUploadCard").hidden = !assetsNs2;
+  if (!db) { $("vidStatus").textContent = "動画を読み込めません（ログインが必要です）"; return; }
+  try {
+    db.collection("videos").onSnapshot(snap => {
+      videos = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((x, y) => (y.date || "").localeCompare(x.date || "") || (x.title || "").localeCompare(y.title || ""));
+      if (currentTab === "videos") renderVideos();
+      if (currentTab === "log") renderLogTable();
+    }, () => { $("vidStatus").textContent = "動画一覧を読み込めませんでした"; });
+  } catch (e) { $("vidStatus").textContent = "動画一覧を読み込めませんでした"; }
+}
+function renderVideos() {
+  const only = $("vidOnlyOpp").checked;
+  const list = videos.filter(v => !only || v.opp === state.opp || v.kind === "ref");
+  $("vidStatus").textContent = videos.length ? `${list.length} 本` : "動画はまだありません。チャットに送ってもらえれば分析と一緒に追加します。";
+  $("vidList").innerHTML = list.map(v => `
+    <li class="${vidCurrent === v.id ? "on" : ""}" data-vid="${esc(v.id)}">
+      ${v.opp && sdSrc(v.opp) ? `<img class="sd-mini" src="${sdSrc(v.opp)}" alt="">` : ""}
+      <div><b>${esc(v.title || "動画")}</b><div class="muted small">${esc(v.date || "")}${v.kind === "ref" ? " ・参考" : ""}${v.result ? " ・" + (v.result === "W" ? "勝ち" : "負け") : ""}</div></div>
+    </li>`).join("");
+  if (!vidCurrent && list.length) selectVideo(list[0].id, false);
+  else if (vidCurrent) renderVideoInfo();
+}
+function selectVideo(id, play) {
+  const v = videos.find(x => x.id === id); if (!v) return;
+  vidCurrent = id;
+  const p = $("vidPlayer"), src = "/_blob/" + v.asset;
+  if (p.getAttribute("src") !== src) p.setAttribute("src", src);
+  document.querySelectorAll("#vidList li").forEach(li => li.classList.toggle("on", li.dataset.vid === id));
+  renderVideoInfo();
+  if (play) p.play().catch(() => {});
+}
+function renderVideoInfo() {
+  const v = videos.find(x => x.id === vidCurrent); if (!v) { $("vidInfo").innerHTML = ""; return; }
+  const mk = (v.markers || []).slice().sort((x, y) => x.t - y.t);
+  $("vidInfo").innerHTML = `
+    <h3>${esc(v.title || "")}</h3>
+    ${v.summary ? `<p class="core">${esc(v.summary)}</p>` : ""}
+    ${mk.length ? `<div class="muted small">タップでその場面へ</div><ul class="markers">${mk.map(m => `
+      <li><button class="small mk ${esc(m.kind || "info")}" data-seek="${m.t}">${fmtSec(m.t)}</button><span>${esc(m.label)}</span></li>`).join("")}</ul>` : ""}`;
+}
+$("vidList").addEventListener("click", e => { const li = e.target.closest("li[data-vid]"); if (li) selectVideo(li.dataset.vid, true); });
+$("vidInfo").addEventListener("click", e => {
+  const t = e.target.dataset.seek; if (t == null) return;
+  const p = $("vidPlayer"); p.currentTime = +t; p.play().catch(() => {});
+  p.scrollIntoView({ behavior: "smooth", block: "nearest" });
+});
+$("vidOnlyOpp").addEventListener("change", renderVideos);
+$("logBody").addEventListener("click", e => {
+  const id = e.target.dataset.openvid; if (!id) return;
+  showTab("videos"); selectVideo(id, true);
+});
+$("vidUpload").addEventListener("click", async () => {
+  const f = $("vidFile").files[0];
+  if (!f) { $("vidMsg").textContent = "ファイルを選んでください"; return; }
+  if (f.size > 20 * 1048576) { $("vidMsg").textContent = "20MB を超えています。動画シュリンクで小さくしてください"; return; }
+  if (!assetsNs2) return;
+  $("vidUpload").disabled = true; $("vidMsg").textContent = "アップロード中…";
+  try {
+    const type = /webm$/i.test(f.name) ? "video/webm" : "video/mp4";
+    const res = await assetsNs2.upload(f, { type });
+    const db = await claude.use("db");
+    await db.collection("videos").add({ asset: res.id, title: $("vidTitle").value.trim() || f.name, mine: state.mine, opp: state.opp, date: today(), kind: "self", markers: [] });
+    $("vidMsg").textContent = "追加しました"; $("vidTitle").value = ""; $("vidFile").value = "";
+  } catch (err) {
+    $("vidMsg").textContent = err?.code === "too_large" ? "20MB を超えています" : err?.code === "quota_or_state" ? "保管庫がいっぱいです" : "追加できませんでした：" + (err?.message || err?.code || err);
+  }
+  $("vidUpload").disabled = false;
+});
+
 // ---- タブ ----
-const TABS = ["matchup", "frames", "drills", "log", "analysis", "list", "data"];
+const TABS = ["matchup", "frames", "drills", "log", "analysis", "videos", "list", "data"];
 let currentTab = "matchup";
 function showTab(name) {
   currentTab = name;
@@ -551,7 +629,7 @@ function showTab(name) {
 }
 function renderTab(name) {
   ({ matchup: renderMatchup, frames: renderFrames, drills: renderDrills, log: () => { renderLogForm(); renderLogTable(); },
-     analysis: renderAnalysis, list: renderList, data: renderCustom })[name]();
+     analysis: renderAnalysis, videos: renderVideos, list: renderList, data: renderCustom })[name]();
 }
 function renderAll() { fillSelects(); renderTab(currentTab); }
 
@@ -751,3 +829,4 @@ if (!(state.puddle || []).length && typeof PUDDLE_SEED !== "undefined" && PUDDLE
 }
 renderAll();
 cloudInit();
+videosInit();

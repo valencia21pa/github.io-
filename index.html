@@ -34,6 +34,7 @@
     <button role="tab" data-tab="drills" aria-selected="false">練習</button>
     <button role="tab" data-tab="log" aria-selected="false">試合ログ</button>
     <button role="tab" data-tab="analysis" aria-selected="false">分析</button>
+    <button role="tab" data-tab="videos" aria-selected="false">動画</button>
     <button role="tab" data-tab="list" aria-selected="false">一覧</button>
     <button role="tab" data-tab="data" aria-selected="false">データ管理</button>
   </div>
@@ -160,6 +161,36 @@
     <div class="grid2">
       <div class="card"><h2>負けの原因</h2><div id="anaCauses"></div></div>
       <div class="card"><h2>相手キャラ別</h2><div id="anaOpps"></div></div>
+    </div>
+  </section>
+
+  <!-- 動画 -->
+  <section id="tab-videos" class="hidden">
+    <div class="card">
+      <div class="row between">
+        <h2 style="margin:0">動画</h2>
+        <label class="chk"><input type="checkbox" id="vidOnlyOpp">今の相手キャラだけ</label>
+      </div>
+      <p class="muted" id="vidStatus">動画を読み込み中…</p>
+      <div class="vid-layout">
+        <div class="vid-player">
+          <video id="vidPlayer" controls playsinline preload="metadata"></video>
+          <div id="vidInfo"></div>
+        </div>
+        <div class="vid-side">
+          <ul class="vid-list" id="vidList"></ul>
+        </div>
+      </div>
+    </div>
+    <div class="card" id="vidUploadCard" hidden>
+      <h2>動画を追加</h2>
+      <p class="muted">20MB まで（mp4 / webm）。スマホの Claude アプリ内ではファイル選択が開かないので、Chrome で開いて追加してください。チャットに送ってもらえれば、分析と一緒にこちらで追加します。</p>
+      <div class="row">
+        <label class="field">タイトル<input type="text" id="vidTitle" placeholder="例：カイ戦 負け 壁際"></label>
+        <label class="field narrow">ファイル<input type="file" id="vidFile" accept="video/mp4,video/webm"></label>
+        <button class="primary" id="vidUpload">追加</button>
+      </div>
+      <span class="muted" id="vidMsg"></span>
     </div>
   </section>
 
