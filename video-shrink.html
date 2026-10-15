@@ -124,7 +124,7 @@ video, canvas { max-width: 100%; border-radius: 8px; background: #000; }
       <button id="directUpload">圧縮せずにそのままアップロード</button>
       <span class="muted">20MB以下なので圧縮なしでも送れます</span>
     </div>
-    <p class="tip" style="margin-top:12px">処理は<b>実時間</b>で進みます（3分の動画なら約3分）。タブを前面にしたままにしてください。裏に回すとブラウザが描画を止めて、途中でコマが抜けます。</p>
+    <p class="tip" style="margin-top:12px" id="speedTip">対応ブラウザ（Chrome / Edge）で mp4 / mov なら<b>高速モード</b>で処理します（目安：動画の長さの 1/3〜1/10）。それ以外は実時間で処理するので、タブを前面にしたままにしてください。</p>
     <div class="row" style="margin-top:12px">
       <button class="primary" id="run">圧縮を開始</button>
       <button id="cancel" hidden>中止</button>
@@ -166,6 +166,9 @@ video, canvas { max-width: 100%; border-radius: 8px; background: #000; }
   </section>
 </main>
 
+<script src="https://cdn.jsdelivr.net/npm/mp4box@0.5.2/dist/mp4box.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5.1.3/build/mp4-muxer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/webm-muxer@5.0.3/build/webm-muxer.js"></script>
 <script>
 (() => {
   const $ = id => document.getElementById(id);
@@ -232,7 +235,7 @@ video, canvas { max-width: 100%; border-radius: 8px; background: #000; }
     const bytes = (kbps + audio) * 1000 / 8 * len;
     const { w, h } = targetSize();
     $("estimate").innerHTML = `約 ${fmtMB(bytes)} <small>（${w}×${h}・${$("fps").value}fps・${fmtT(len)}）</small>`;
-    $("estimateNote").textContent = meta.size ? `元の ${fmtMB(meta.size)} の約 ${Math.max(1, Math.round(bytes / meta.size * 100))}%。処理時間はおよそ ${fmtT(len)}` : "";
+    $("estimateNote").textContent = meta.size ? `元の ${fmtMB(meta.size)} の約 ${Math.max(1, Math.round(bytes / meta.size * 100))}%。処理時間は高速モードで数十秒〜、通常モードで約 ${fmtT(len)}` : "";
     $("estimate").className = "estimate" + (bytes > LIMIT ? " err" : "");
     if (bytes > LIMIT) $("estimateNote").textContent += "　／　20MB を超えます。範囲を狭めるか画質を下げてください";
   }
@@ -258,6 +261,147 @@ video, canvas { max-width: 100%; border-radius: 8px; background: #000; }
     return cands.find(([t]) => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || null;
   }
 
+  // ---- 高速モード（WebCodecs：再生を待たずにデコード→縮小→エンコード）----
+  const hasWebCodecs = () => typeof VideoDecoder !== "undefined" && typeof VideoEncoder !== "undefined" && typeof MP4Box !== "undefined" && typeof OffscreenCanvas !== "undefined";
+  function trackDescription(mp4, track) {
+    const trak = mp4.getTrackById(track.id);
+    for (const entry of trak.mdia.minf.stbl.stsd.entries) {
+      const box = entry.avcC || entry.hvcC || entry.vpcC || entry.av1C;
+      if (box) {
+        const st = new DataStream(undefined, 0, DataStream.BIG_ENDIAN);
+        box.write(st);
+        return new Uint8Array(st.buffer, 8);
+      }
+    }
+    return undefined;
+  }
+  function aacConfig(mp4, track) {
+    try {
+      const e = mp4.getTrackById(track.id).mdia.minf.stbl.stsd.entries[0];
+      const d = e.esds.esd.descs[0].descs[0].data;
+      return d ? new Uint8Array(d) : undefined;
+    } catch (_) { return undefined; }
+  }
+  async function demux(f) {
+    const buf = await f.arrayBuffer();
+    return await new Promise((resolve, reject) => {
+      const mp4 = MP4Box.createFile();
+      const out = { info: null, video: [], audio: [], mp4 };
+      mp4.onError = err => reject(new Error(String(err)));
+      mp4.onReady = info => {
+        out.info = info;
+        const vt = info.videoTracks[0], at = info.audioTracks[0];
+        if (!vt) return reject(new Error("映像トラックがありません"));
+        mp4.setExtractionOptions(vt.id, "v", { nbSamples: 1e9 });
+        if (at) mp4.setExtractionOptions(at.id, "a", { nbSamples: 1e9 });
+        mp4.start();
+      };
+      mp4.onSamples = (id, user, samples) => { (user === "v" ? out.video : out.audio).push(...samples); };
+      buf.fileStart = 0;
+      mp4.appendBuffer(buf);
+      mp4.flush();
+      // 全サンプルは同期的に届く
+      setTimeout(() => out.info ? resolve(out) : reject(new Error("mp4 / mov として読めませんでした")), 0);
+    });
+  }
+  async function pickEncoder(w, h, fps, bitrate) {
+    const opts = [
+      { codec: "avc1.4d0028", mux: "mp4", mc: "avc", ext: "mp4" },
+      { codec: "avc1.42001f", mux: "mp4", mc: "avc", ext: "mp4" },
+      { codec: "vp09.00.10.08", mux: "mp4", mc: "vp9", ext: "mp4" },
+      { codec: "vp8", mux: "webm", mc: "V_VP8", ext: "webm" },
+    ];
+    for (const o of opts) {
+      const cfg = { codec: o.codec, width: w, height: h, bitrate, framerate: fps, latencyMode: "quality" };
+      if (o.codec.startsWith("avc")) cfg.avc = { format: "avc" };
+      try { const r = await VideoEncoder.isConfigSupported(cfg); if (r.supported) return { ...o, cfg }; } catch (_) {}
+    }
+    return null;
+  }
+  const sleep0 = () => new Promise(r => setTimeout(r, 0));
+  async function runFast({ s, e, len, w, h, fps, kbps, keepAudio, bar }) {
+    const t0 = performance.now();
+    setStatus("高速モード：読み込み中…");
+    const dm = await demux(file);
+    const vt = dm.info.videoTracks[0], at = dm.info.audioTracks[0];
+    const decCfg = { codec: vt.codec, codedWidth: vt.video.width, codedHeight: vt.video.height, description: trackDescription(dm.mp4, vt) };
+    const dsup = await VideoDecoder.isConfigSupported(decCfg).catch(() => ({ supported: false }));
+    if (!dsup.supported) throw new Error("この動画の形式（" + vt.codec + "）は高速モードで読めません");
+    const enc = await pickEncoder(w, h, fps, kbps * 1000);
+    if (!enc) throw new Error("このブラウザは高速書き出しに対応していません");
+    const useAudio = keepAudio && at && enc.mux === "mp4" && /^mp4a/.test(at.codec);
+    const sUs = s * 1e6, eUs = e * 1e6;
+    const muxer = enc.mux === "mp4"
+      ? new Mp4Muxer.Muxer({ target: new Mp4Muxer.ArrayBufferTarget(), fastStart: "in-memory", firstTimestampBehavior: "offset",
+          video: { codec: enc.mc, width: w, height: h },
+          audio: useAudio ? { codec: "aac", numberOfChannels: at.audio.channel_count, sampleRate: at.audio.sample_rate } : undefined })
+      : new WebMMuxer.Muxer({ target: new WebMMuxer.ArrayBufferTarget(), firstTimestampBehavior: "offset", video: { codec: enc.mc, width: w, height: h, frameRate: fps } });
+    let encErr = null, decErr = null;
+    const encoder = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: err => encErr = err });
+    encoder.configure(enc.cfg);
+    const cvs = new OffscreenCanvas(w, h), cx = cvs.getContext("2d", { alpha: false });
+    const step = 1e6 / fps; let nextT = 0, n = 0, lastTs = 0;
+    const decoder = new VideoDecoder({
+      output: frame => {
+        const t = frame.timestamp - sUs;
+        if (frame.timestamp >= sUs && frame.timestamp <= eUs && t >= nextT - 1) {
+          cx.drawImage(frame, 0, 0, w, h);
+          const vf = new VideoFrame(cvs, { timestamp: Math.round(nextT), duration: Math.round(step) });
+          encoder.encode(vf, { keyFrame: n % (fps * 2) === 0 });
+          vf.close(); n++; nextT += step; lastTs = t;
+        }
+        frame.close();
+      },
+      error: err => decErr = err,
+    });
+    decoder.configure(decCfg);
+    // 開始位置の直前のキーフレームから
+    const samples = dm.video;
+    let i0 = 0;
+    for (let i = 0; i < samples.length; i++) { const ct = samples[i].cts / samples[i].timescale * 1e6; if (ct > sUs) break; if (samples[i].is_sync) i0 = i; }
+    setStatus("高速モード：圧縮中…");
+    for (let i = i0; i < samples.length; i++) {
+      if (aborted) break;
+      if (encErr || decErr) throw (encErr || decErr);
+      const sm = samples[i], ts = sm.cts / sm.timescale * 1e6;
+      if (ts > eUs + 1e6) break;
+      decoder.decode(new EncodedVideoChunk({ type: sm.is_sync ? "key" : "delta", timestamp: ts, duration: sm.duration / sm.timescale * 1e6, data: sm.data }));
+      while (decoder.decodeQueueSize > 8 || encoder.encodeQueueSize > 8) await sleep0();
+      if (i % 15 === 0) {
+        const p = Math.min(1, Math.max(0, (ts - sUs) / (eUs - sUs)));
+        bar.style.width = (p * 100) + "%";
+        const el = (performance.now() - t0) / 1000;
+        setStatus(`高速モード：圧縮中 ${Math.round(p * 100)}%` + (p > 0.05 ? `　残り約 ${fmtT(el / p - el)}` : ""));
+        await sleep0();
+      }
+    }
+    await decoder.flush(); await encoder.flush();
+    decoder.close(); encoder.close();
+    if (encErr || decErr) throw (encErr || decErr);
+    if (aborted) return null;
+    if (useAudio) {
+      const desc = aacConfig(dm.mp4, at); let first = true;
+      for (const sm of dm.audio) {
+        const ts = sm.cts / sm.timescale * 1e6; if (ts < sUs || ts > eUs) continue;
+        const meta = first ? { decoderConfig: { codec: at.codec, numberOfChannels: at.audio.channel_count, sampleRate: at.audio.sample_rate, description: desc } } : undefined;
+        muxer.addAudioChunkRaw(new Uint8Array(sm.data), "key", Math.round(ts - sUs), Math.round(sm.duration / sm.timescale * 1e6), meta);
+        first = false;
+      }
+    }
+    muxer.finalize();
+    const secs = ((performance.now() - t0) / 1000).toFixed(1);
+    return { blob: new Blob([muxer.target.buffer], { type: enc.ext === "mp4" ? "video/mp4" : "video/webm" }), ext: enc.ext, secs, audio: useAudio };
+  }
+  function showResult(blob, ext, w, h, fps, len, note) {
+    outBlob = blob; outExt = ext;
+    const ratio = Math.round(outBlob.size / meta.size * 100);
+    $("resultStat").innerHTML = `<span>出力サイズ</span><b class="ok">${fmtMB(outBlob.size)}</b><span>元のサイズ</span><b>${fmtMB(meta.size)}（${ratio}%に）</b><span>形式</span><b>${ext}・${w}×${h}・${fps}fps</b><span>長さ</span><b>${fmtT(len)}</b>` + (note ? `<span>処理</span><b>${note}</b>` : "");
+    const out = $("out"); if (out.src) URL.revokeObjectURL(out.src); out.src = URL.createObjectURL(outBlob);
+    $("result").hidden = false; $("saveMsg").textContent = "";
+    offerUpload(outBlob, (file.name.replace(/\.[^.]+$/, "") || "video") + "_small." + ext, ext);
+    $("result").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   $("run").addEventListener("click", async () => {
     if (!meta) return;
     const picked = pickType();
@@ -269,6 +413,21 @@ video, canvas { max-width: 100%; border-radius: 8px; background: #000; }
     aborted = false; outBlob = null; $("result").hidden = true;
     $("run").disabled = true; $("cancel").hidden = false; $("progress").hidden = false;
     const bar = $("progress").firstElementChild;
+    if (hasWebCodecs() && /\.(mp4|m4v|mov)$/i.test(file.name)) {
+      try {
+        const r = await runFast({ s, e, len, w, h, fps, kbps: +$("bitrate").value, keepAudio: $("audio").checked, bar });
+        $("run").disabled = false; $("cancel").hidden = true;
+        if (!r) { setStatus("中止しました"); $("progress").hidden = true; return; }
+        bar.style.width = "100%";
+        setStatus(`完了（高速モード ${r.secs} 秒）` + ($("audio").checked && !r.audio ? "　※音声は含まれていません" : ""), false);
+        showResult(r.blob, r.ext, w, h, fps, len, `高速モード ${r.secs} 秒` + (r.audio ? "" : "・音声なし"));
+        return;
+      } catch (err) {
+        console.warn("fast path failed", err);
+        setStatus("高速モードが使えなかったので通常モードで処理します（" + (err?.message || err) + "）");
+        bar.style.width = "0";
+      }
+    }
     canvas.width = w; canvas.height = h;
 
     // 音声: 元動画の captureStream から取る（対応ブラウザのみ）
@@ -312,15 +471,9 @@ video, canvas { max-width: 100%; border-radius: 8px; background: #000; }
     cleanup();
     if (aborted) { setStatus("中止しました"); $("progress").hidden = true; return; }
 
-    outBlob = new Blob(chunks, { type: mime.split(";")[0] });
     bar.style.width = "100%";
     setStatus("完了", false);
-    const ratio = Math.round(outBlob.size / meta.size * 100);
-    $("resultStat").innerHTML = `<span>出力サイズ</span><b class="ok">${fmtMB(outBlob.size)}</b><span>元のサイズ</span><b>${fmtMB(meta.size)}（${ratio}%に）</b><span>形式</span><b>${ext}・${w}×${h}・${fps}fps</b><span>長さ</span><b>${fmtT(len)}</b>`;
-    const out = $("out"); if (out.src) URL.revokeObjectURL(out.src); out.src = URL.createObjectURL(outBlob);
-    $("result").hidden = false; $("saveMsg").textContent = "";
-    offerUpload(outBlob, (file.name.replace(/\.[^.]+$/, "") || "video") + "_small." + ext, ext);
-    $("result").scrollIntoView({ behavior: "smooth", block: "start" });
+    showResult(new Blob(chunks, { type: mime.split(";")[0] }), ext, w, h, fps, len, "通常モード（実時間）");
   });
   $("cancel").addEventListener("click", () => { aborted = true; });
 
