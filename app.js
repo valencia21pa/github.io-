@@ -283,6 +283,8 @@ function framesFor(id) {
   const c = charById(id);
   return (state.frames[id] || FRAME_DATA[id] || []);
 }
+// 日本語の技名（wikiwiki.jp/ggst-memo のフレーム表から。JP_NAMES[キャラ][Dustloop入力]）
+const jpName = (cid, m) => (typeof JP_NAMES !== "undefined" && JP_NAMES[cid] && JP_NAMES[cid][m.input]) || "";
 // フレームタブの絞り込み状態（タブ切り替えでも保持）
 let frameFilter = { q: "", punish: false, specials: false, sort: "" };
 const advNum = v => { const n = parseInt(String(v ?? "").replace(/^[^\d+-]*/, ""), 10); return isNaN(n) ? null : n; };
@@ -298,7 +300,7 @@ function renderFrames() {
   }
   const f = frameFilter, q = f.q.trim().toLowerCase();
   let rows = all.filter(m =>
-    (!q || (m.name + " " + m.input).toLowerCase().includes(q)) &&
+    (!q || (m.name + " " + m.input + " " + (jpName(opp.id, m) || "")).toLowerCase().includes(q)) &&
     (!f.punish || (advNum(m.onBlock) ?? 0) <= -5) &&
     (!f.specials || m.name));
   if (f.sort === "block") rows = rows.slice().sort((a, b) => (advNum(a.onBlock) ?? 99) - (advNum(b.onBlock) ?? 99));
@@ -327,7 +329,7 @@ function renderFrames() {
     <div class="table-wrap"><table>
       <thead><tr><th>技</th><th>入力</th><th class="num">発生</th><th class="num">持続</th><th class="num">硬直</th><th class="num">ガード後</th><th class="num">ヒット後</th><th>ガード</th><th>Lv</th></tr></thead>
       <tbody>${rows.map(m => `<tr>
-        <td>${esc(m.name)}</td><td>${esc(m.input)}</td>
+        <td>${jpName(opp.id, m) ? `${esc(jpName(opp.id, m))}${m.name ? `<div class="muted small">${esc(m.name)}</div>` : ""}` : esc(m.name)}</td><td>${esc(m.input)}</td>
         <td class="num">${esc(m.startup)}</td><td class="num">${esc(m.active)}</td><td class="num">${esc(m.recovery)}</td>
         <td class="num">${fmtAdv(m.onBlock)}</td><td class="num">${fmtAdv(m.onHit)}</td>
         <td>${esc(m.guard)}</td><td>${esc(m.level)}</td></tr>`).join("") || "<tr><td colspan='9' class='muted'>該当なし</td></tr>"}</tbody>

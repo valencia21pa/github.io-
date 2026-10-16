@@ -17848,3 +17848,6 @@ const KEY_MOVES = {
   "roboky": [],
   "lucy": []
 };
+
+// 日本語の技名（GGST memo wiki のフレーム表と照合）。キャラID → { Dustloop の入力: 日本語名 }
+const JP_NAMES = {};
