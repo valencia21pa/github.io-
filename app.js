@@ -258,7 +258,7 @@ function renderMatchup() {
       <h2>アバで ${esc(opp.name)} と戦う時</h2>
       <dl class="kv">
         <dt>立ち回り方針</dt><dd>${esc(aba.plan)}</dd>
-        <dt>JRゲージ運用</dt><dd>${esc(aba.gauge)}</dd>
+        <dt>憤嫉ゲージ運用</dt><dd>${esc(aba.gauge)}</dd>
         <dt>注意点</dt><dd>${esc(aba.watch)}</dd>
       </dl>`;
   }
