@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ドット絵アイコンメーカー</title>
+<title>ドット絵メーカー</title>
 <style>
   :root {
     --bg: #f4f4f6;
@@ -30,6 +30,7 @@
     }
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body {
     margin: 0;
     background: var(--bg);
@@ -39,22 +40,22 @@
   }
   header {
     padding: 16px;
-    max-width: 1100px;
+    max-width: 1140px;
     margin: 0 auto;
   }
   h1 { font-size: 20px; margin: 0 0 4px; }
   header p { margin: 0; color: var(--muted); }
   main {
-    max-width: 1100px;
+    max-width: 1140px;
     margin: 0 auto;
     padding: 0 16px 32px;
     display: grid;
-    grid-template-columns: 220px 1fr 220px;
+    grid-template-columns: 220px minmax(0, 1fr) 240px;
     gap: 16px;
     align-items: start;
   }
-  @media (max-width: 860px) {
-    main { grid-template-columns: 1fr; }
+  @media (max-width: 900px) {
+    main { grid-template-columns: minmax(0, 1fr); }
     #stage-wrap { order: -1; }
   }
   .panel {
@@ -64,7 +65,7 @@
     padding: 12px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 14px;
   }
   .panel h2 {
     font-size: 12px;
@@ -83,9 +84,12 @@
     padding: 6px 10px;
     cursor: pointer;
   }
-  button:hover { border-color: var(--accent); }
+  select { max-width: 100%; }
+  input[type=number] { width: 4.5em; cursor: text; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
   button:disabled { opacity: .4; cursor: default; }
-  button.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  button.on, button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  button.big { width: 100%; padding: 10px; font-weight: 600; }
   .tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
   .tools button { padding: 8px 0; font-size: 18px; line-height: 1; }
   .tools button small { display: block; font-size: 10px; margin-top: 3px; }
@@ -94,10 +98,9 @@
     flex-direction: column;
     align-items: center;
     gap: 10px;
+    min-width: 0;
   }
   #stage {
-    width: min(100%, 560px);
-    aspect-ratio: 1;
     border: 1px solid var(--line);
     border-radius: 6px;
     overflow: hidden;
@@ -108,6 +111,32 @@
   }
   #stage canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; cursor: crosshair; }
   #status { color: var(--muted); font-variant-numeric: tabular-nums; min-height: 1.4em; }
+  .frames-bar { width: 100%; }
+  .frames {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 4px 2px 8px;
+  }
+  .thumb {
+    flex: none;
+    width: 64px;
+    height: 72px;
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg);
+  }
+  .thumb.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .thumb canvas {
+    image-rendering: pixelated;
+    background:
+      conic-gradient(var(--checker-b) 25%, var(--checker-a) 0 50%, var(--checker-b) 0 75%, var(--checker-a) 0)
+      0 0 / 6px 6px;
+  }
+  .thumb span { font-size: 11px; color: var(--muted); }
   .palette { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
   .swatch {
     aspect-ratio: 1;
@@ -121,9 +150,9 @@
       conic-gradient(#ccc 25%, #fff 0 50%, #ccc 0 75%, #fff 0) 0 0 / 8px 8px;
   }
   .current { display: flex; gap: 8px; align-items: center; }
-  .current input[type=color] { width: 44px; height: 32px; border: 1px solid var(--line); border-radius: 6px; padding: 0; background: none; }
+  input[type=color] { width: 44px; height: 32px; border: 1px solid var(--line); border-radius: 6px; padding: 0; background: none; cursor: pointer; }
   .previews { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
-  .previews canvas {
+  .checker, .previews canvas {
     image-rendering: pixelated;
     border: 1px solid var(--line);
     background:
@@ -131,19 +160,55 @@
       0 0 / 8px 8px;
   }
   label.chk { display: flex; gap: 6px; align-items: center; cursor: pointer; }
-  .hint { color: var(--muted); font-size: 12px; line-height: 1.5; }
+  .hint { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 6px 0 0; }
   kbd { font-family: ui-monospace, monospace; font-size: 11px; border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
+  .mono { font-family: ui-monospace, monospace; }
+
+  /* 画像変換ダイアログ */
+  dialog {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--panel);
+    color: var(--text);
+    padding: 0;
+    width: min(800px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+  }
+  dialog::backdrop { background: rgba(0, 0, 0, .45); }
+  .dlg { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .dlg h2 { margin: 0; font-size: 17px; }
+  .dlg-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+  @media (max-width: 680px) { .dlg-body { grid-template-columns: minmax(0, 1fr); } }
+  .drop {
+    border: 2px dashed var(--line);
+    border-radius: 10px;
+    padding: 48px 12px;
+    text-align: center;
+    color: var(--muted);
+    cursor: pointer;
+    line-height: 1.7;
+  }
+  .drop.over { border-color: var(--accent); color: var(--accent); }
+  .cmp { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  figure { margin: 0; display: flex; flex-direction: column; gap: 4px; align-items: center; }
+  figcaption { font-size: 12px; color: var(--muted); }
+  #srcImg { max-width: 160px; max-height: 160px; border-radius: 4px; }
+  .opts { display: grid; grid-template-columns: 6.5em minmax(0, 1fr); gap: 10px 8px; align-items: center; }
+  .opts > span { color: var(--muted); font-size: 13px; }
+  .opts input[type=range] { width: 100%; }
+  .dlg-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 </style>
 </head>
 <body>
 <header>
-  <h1>ドット絵アイコンメーカー</h1>
-  <p>ブラウザだけで描けるピクセルアートエディタ。描いたアイコンはPNGで保存できます。</p>
+  <h1>ドット絵メーカー</h1>
+  <p>アイコンもゲームキャラも、ブラウザだけで作れるピクセルアートエディタ。アニメーションや画像からの変換にも対応。</p>
 </header>
 
 <main>
   <!-- 左: ツール -->
   <section class="panel">
+    <button class="big primary" id="openImport">🖼 画像からドット絵を作る</button>
     <div>
       <h2>ツール</h2>
       <div class="tools" id="tools">
@@ -173,8 +238,8 @@
       <div class="row" style="margin-top:6px">
         <button id="flipH" title="左右反転">⇋</button>
         <button id="flipV" title="上下反転">⇵</button>
-        <button id="rotate" title="90°回転">⟳</button>
-        <button id="clear">クリア</button>
+        <button id="rotate" title="90°回転（正方形のみ）">⟳</button>
+        <button id="clear" title="このフレームを消す">クリア</button>
       </div>
       <div class="row" style="margin-top:6px">
         <button id="shiftL" title="左へずらす">←</button>
@@ -182,6 +247,20 @@
         <button id="shiftD" title="下へずらす">↓</button>
         <button id="shiftR" title="右へずらす">→</button>
       </div>
+      <div class="row" style="margin-top:6px">
+        <button id="outline" title="絵のまわりに今の色で1ドットの輪郭線を付ける">輪郭線を付ける</button>
+      </div>
+    </div>
+    <div>
+      <h2>ゲームキャラのテンプレート</h2>
+      <div class="row">
+        <select id="template">
+          <option value="hero">勇者（16×16・2コマ）</option>
+          <option value="slime">スライム（16×16・2コマ）</option>
+        </select>
+        <button id="loadTemplate">読み込む</button>
+      </div>
+      <p class="hint">下絵や改造のベースにどうぞ。今の絵は「戻す」で元に戻せます。</p>
     </div>
     <div>
       <h2>表示</h2>
@@ -189,10 +268,24 @@
     </div>
   </section>
 
-  <!-- 中央: キャンバス -->
+  <!-- 中央: キャンバスとフレーム -->
   <section id="stage-wrap">
     <div id="stage"><canvas id="canvas"></canvas></div>
     <div id="status"></div>
+    <div class="panel frames-bar">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">フレーム（アニメーション）</h2>
+        <label class="chk"><input type="checkbox" id="onion"> 前のコマを薄く表示</label>
+      </div>
+      <div class="frames" id="frames"></div>
+      <div class="row">
+        <button id="frameAdd" title="空のフレームを追加">＋ 追加</button>
+        <button id="frameDup" title="今のフレームを複製">⧉ 複製</button>
+        <button id="frameDel" title="今のフレームを削除">🗑 削除</button>
+        <button id="frameLeft" title="前へ移動">◀</button>
+        <button id="frameRight" title="後ろへ移動">▶</button>
+      </div>
+    </div>
   </section>
 
   <!-- 右: 色・サイズ・出力 -->
@@ -201,185 +294,393 @@
       <h2>色</h2>
       <div class="current">
         <input type="color" id="color" value="#222034">
-        <span id="colorHex" style="font-family:ui-monospace,monospace">#222034</span>
+        <span id="colorHex" class="mono">#222034</span>
       </div>
       <div class="palette" id="palette" style="margin-top:8px"></div>
     </div>
     <div>
+      <h2>この絵で使っている色</h2>
+      <div class="palette" id="used"></div>
+    </div>
+    <div>
       <h2>キャンバスサイズ</h2>
-      <div class="row">
-        <select id="size">
-          <option value="8">8 × 8</option>
-          <option value="16" selected>16 × 16</option>
-          <option value="24">24 × 24</option>
-          <option value="32">32 × 32</option>
-          <option value="48">48 × 48</option>
-          <option value="64">64 × 64</option>
-        </select>
+      <select id="size">
+        <optgroup label="アイコン（正方形）">
+          <option value="8x8">8 × 8</option>
+          <option value="16x16">16 × 16</option>
+          <option value="24x24">24 × 24</option>
+          <option value="32x32">32 × 32</option>
+          <option value="48x48">48 × 48</option>
+          <option value="64x64">64 × 64</option>
+        </optgroup>
+        <optgroup label="ゲームキャラ（縦長）">
+          <option value="16x24">16 × 24</option>
+          <option value="16x32">16 × 32</option>
+          <option value="24x32">24 × 32</option>
+          <option value="32x48">32 × 48</option>
+        </optgroup>
+        <option value="custom">カスタム…</option>
+      </select>
+      <div class="row" id="customSize" style="margin-top:6px" hidden>
+        <input type="number" id="customW" min="1" max="128"> ×
+        <input type="number" id="customH" min="1" max="128">
+        <button id="applySize">変更</button>
       </div>
-      <p class="hint">サイズ変更すると、今の絵は左上基準で残ります。</p>
+      <p class="hint">サイズを変えると、全フレームの絵が中央にそろえて残ります。</p>
     </div>
     <div>
       <h2>プレビュー</h2>
       <div class="previews">
-        <canvas id="pv1"></canvas>
-        <canvas id="pv2"></canvas>
-        <canvas id="pv4"></canvas>
+        <canvas id="pv1" title="等倍"></canvas>
+        <canvas id="pv2" title="2倍"></canvas>
+        <canvas id="anim" title="アニメーション"></canvas>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="play">⏸ 停止</button>
+        <input type="range" id="fps" min="1" max="24" style="flex:1;min-width:60px">
+        <span id="fpsLabel" class="mono"></span>
       </div>
     </div>
     <div>
       <h2>保存</h2>
       <div class="row">
+        <span>拡大</span>
         <select id="scale">
           <option value="1">等倍</option>
+          <option value="2">×2</option>
           <option value="4">×4</option>
           <option value="8" selected>×8</option>
           <option value="16">×16</option>
-          <option value="32">×32</option>
         </select>
-        <button id="download">PNG保存</button>
       </div>
       <div class="row" style="margin-top:6px">
-        <button id="importBtn">画像を読み込む</button>
-        <input type="file" id="importFile" accept="image/*" hidden>
+        <button id="download">PNG（このコマ）</button>
+        <button id="sheet">スプライトシート</button>
+        <button id="gif">GIFアニメ</button>
       </div>
-      <p class="hint">読み込んだ画像は現在のサイズに縮小してドット化されます。作業内容はブラウザに自動保存されます。</p>
+      <p class="hint">背景は透明で保存されます。スプライトシートは全フレームを横に並べたPNGです。作業内容はブラウザに自動保存されます。</p>
     </div>
     <p class="hint">
-      <kbd>B</kbd>ペン <kbd>E</kbd>消す <kbd>G</kbd>塗り <kbd>I</kbd>スポイト <kbd>L</kbd>直線 <kbd>R</kbd>四角 <kbd>C</kbd>円<br>
-      右クリック/<kbd>Alt</kbd>+クリックでスポイト
+      <kbd>B</kbd>ペン <kbd>E</kbd>消す <kbd>G</kbd>塗り <kbd>I</kbd>スポイト <kbd>L</kbd>直線 <kbd>R</kbd>四角 <kbd>C</kbd>円
+      <kbd>,</kbd><kbd>.</kbd>コマ切替<br>
+      右クリック/<kbd>Alt</kbd>+クリックでスポイト。画像はページにドロップ・貼り付けでも読み込めます。
     </p>
   </section>
 </main>
+
+<dialog id="imgDlg">
+  <div class="dlg">
+    <h2>画像からドット絵を作る</h2>
+    <div class="dlg-body">
+      <div>
+        <div class="drop" id="dropZone">
+          ここに画像をドロップ<br>またはクリックして選ぶ<br><small>コピーした画像の貼り付け（Ctrl+V）もOK</small>
+        </div>
+        <div class="cmp" id="cmp" hidden>
+          <figure><img id="srcImg" alt="元画像"><figcaption>元画像</figcaption></figure>
+          <figure><canvas id="dstCanvas" class="checker"></canvas><figcaption id="dstInfo"></figcaption></figure>
+        </div>
+        <input type="file" id="importFile" accept="image/*" hidden>
+      </div>
+      <div class="opts">
+        <span>サイズ</span>
+        <div class="row">
+          <input type="number" id="cvW" min="1" max="128"> ×
+          <input type="number" id="cvH" min="1" max="128">
+          <button type="button" id="cvRatio" title="幅に合わせて、高さを元画像の縦横比にする">比率を合わせる</button>
+        </div>
+        <span>切り抜き</span>
+        <select id="cvCrop">
+          <option value="fit">全体を収める</option>
+          <option value="fill">中央を切り抜く</option>
+          <option value="stretch">引き伸ばす</option>
+        </select>
+        <span>パレット</span>
+        <select id="cvPalette">
+          <option value="auto">自動で色を選ぶ</option>
+          <option value="db32">基本パレット（32色）</option>
+          <option value="pico8">PICO-8風（16色）</option>
+          <option value="nes">ファミコン風（25色）</option>
+          <option value="gb">ゲームボーイ風（4色）</option>
+          <option value="mono">白黒（2色）</option>
+        </select>
+        <span>色数</span>
+        <div class="row"><input type="range" id="cvColors" min="2" max="32" value="12" style="flex:1"><span id="cvColorsLabel" class="mono"></span></div>
+        <span>コントラスト</span>
+        <input type="range" id="cvContrast" min="-50" max="100" value="10">
+        <span>鮮やかさ</span>
+        <input type="range" id="cvSat" min="-100" max="100" value="20">
+        <span>ディザ</span>
+        <label class="chk"><input type="checkbox" id="cvDither"> 点描でグラデーションを表現</label>
+        <span>背景</span>
+        <div class="row">
+          <label class="chk"><input type="checkbox" id="cvBg"> 背景を透明にする</label>
+          <input type="range" id="cvBgTol" min="0" max="100" value="25" title="背景とみなす色の幅" style="flex:1;min-width:60px">
+        </div>
+        <span>輪郭線</span>
+        <div class="row">
+          <label class="chk"><input type="checkbox" id="cvOutline"> 外側に付ける</label>
+          <input type="color" id="cvOutlineColor" value="#222034">
+        </div>
+      </div>
+    </div>
+    <div class="dlg-actions">
+      <button type="button" id="cvOther" hidden>別の画像</button>
+      <button type="button" id="cvCancel">キャンセル</button>
+      <button type="button" id="cvAddFrame" disabled>新しいコマとして追加</button>
+      <button type="button" id="cvApply" class="primary" disabled>今のコマに反映</button>
+    </div>
+  </div>
+</dialog>
 
 <script>
 (() => {
   'use strict';
 
-  // ---- 状態 ----
+  // ---- 定数 ----
   const PALETTE = [
     null, '#000000', '#222034', '#45283c', '#663931', '#8f563b', '#df7126', '#d9a066',
     '#eec39a', '#fbf236', '#99e550', '#6abe30', '#37946e', '#4b692f', '#524b24', '#323c39',
     '#3f3f74', '#306082', '#5b6ee1', '#639bff', '#5fcde4', '#cbdbfc', '#ffffff', '#9badb7',
     '#847e87', '#696a6a', '#595652', '#76428a', '#ac3232', '#d95763', '#d77bba', '#8f974a',
   ];
-  const STORAGE_KEY = 'pixel-icon-maker-v1';
+  const PALETTES = {
+    db32: PALETTE.filter(Boolean),
+    pico8: ['#000000', '#1d2b53', '#7e2553', '#008751', '#ab5236', '#5f574f', '#c2c3c7', '#fff1e8',
+            '#ff004d', '#ffa300', '#ffec27', '#00e436', '#29adff', '#83769c', '#ff77a8', '#ffccaa'],
+    nes: ['#000000', '#fcfcfc', '#bcbcbc', '#7c7c7c', '#a4e4fc', '#3cbcfc', '#0078f8', '#0000fc',
+          '#b8b8f8', '#6888fc', '#0058f8', '#d8b8f8', '#9878f8', '#6844fc', '#f8b8f8', '#f878f8',
+          '#d800cc', '#f8a4c0', '#f85898', '#e40058', '#f0d0b0', '#f87858', '#f83800', '#fce0a8', '#fca044'],
+    gb: ['#0f380f', '#306230', '#8bac0f', '#9bbc0f'],
+    mono: ['#000000', '#ffffff'],
+  };
 
-  let size = 16;
-  let pixels = new Array(size * size).fill(null); // '#rrggbb' または null(透明)
+  const heroRows = [
+    '................',
+    '.....kkkkkk.....',
+    '....khhhhhhk....',
+    '...khhhhhhhhk...',
+    '...khsssssshk...',
+    '...kssksskssk...',
+    '...kssssssssk...',
+    '....kssssssk....',
+    '...kkrrrrrrkk...',
+    '..krrrrrrrrrrk..',
+    '..ksrrrrrrrrsk..',
+    '...kyyyyyyyyk...',
+    '...kbbbbbbbbk...',
+    '...kbbbkkbbbk...',
+    '...kdddkkdddk...',
+    '...kkkk..kkkk...',
+  ];
+  const slimeRows = [
+    '................',
+    '................',
+    '................',
+    '................',
+    '.......kk.......',
+    '......kggk......',
+    '.....kggggk.....',
+    '....kglggggk....',
+    '...kgllgggggk...',
+    '..kglggggggggk..',
+    '..kggweggweggk..',
+    '.kgggweggwegggk.',
+    '.kggggggggggggk.',
+    '.kgggggkkgggggk.',
+    '..kggggggggggk..',
+    '...kkkkkkkkkk...',
+  ];
+  const BLANK_ROW = '................';
+  const TEMPLATES = {
+    hero: {
+      colors: { k: '#222034', h: '#8f563b', s: '#eec39a', r: '#ac3232', y: '#fbf236', b: '#3f3f74', d: '#663931' },
+      // 2コマ目: 体を1ドット沈ませて待機モーションにする
+      frames: [heroRows, [BLANK_ROW, ...heroRows.slice(0, 8), ...heroRows.slice(9)]],
+    },
+    slime: {
+      colors: { k: '#1f3d2b', g: '#6abe30', l: '#d4f5a8', w: '#ffffff', e: '#222034' },
+      // 2コマ目: つぶれた形
+      frames: [slimeRows, [BLANK_ROW, ...slimeRows.slice(0, 6), ...slimeRows.slice(7)]],
+    },
+  };
+
+  const STORAGE_KEY = 'pixel-maker-v2';
+  const OLD_STORAGE_KEY = 'pixel-icon-maker-v1';
+
+  // ---- 状態 ----
+  let W = 16, H = 16;
+  let frames = [blank()];    // 各フレーム: 長さ W*H の配列。'#rrggbb' または null(透明)
+  let cur = 0;
   let tool = 'pen';
   let color = '#222034';
+  let fps = 6;
   let undoStack = [];
   let redoStack = [];
 
-  const canvas = document.getElementById('canvas');
+  function blank(w = W, h = H) { return new Array(w * h).fill(null); }
+
+  const $ = id => document.getElementById(id);
+  const canvas = $('canvas');
   const ctx = canvas.getContext('2d');
-  const statusEl = document.getElementById('status');
-  const colorInput = document.getElementById('color');
-  const colorHex = document.getElementById('colorHex');
-  const paletteEl = document.getElementById('palette');
-  const sizeSel = document.getElementById('size');
-  const showGrid = document.getElementById('showGrid');
-  const mirrorX = document.getElementById('mirrorX');
-  const mirrorY = document.getElementById('mirrorY');
-  const previews = [['pv1', 1], ['pv2', 2], ['pv4', 4]].map(([id, s]) => [document.getElementById(id), s]);
+  const stage = $('stage');
+  const stageWrap = $('stage-wrap');
+  const statusEl = $('status');
+  const colorInput = $('color');
+  const paletteEl = $('palette');
+  const usedEl = $('used');
+  const sizeSel = $('size');
+  const showGrid = $('showGrid');
+  const mirrorX = $('mirrorX');
+  const mirrorY = $('mirrorY');
+  const onion = $('onion');
+  const framesEl = $('frames');
+  const pv1 = $('pv1'), pv2 = $('pv2'), animCanvas = $('anim');
+
+  // ---- 色ユーティリティ ----
+  const hexToRgb = c => { const n = parseInt(c.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
+  const rgbToHex = ([r, g, b]) => '#' + [r, g, b].map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
+  const clamp = v => v < 0 ? 0 : v > 255 ? 255 : v;
+
+  function nearest(r, g, b, pal) {
+    let bi = 0, bd = Infinity;
+    for (let i = 0; i < pal.length; i++) {
+      const p = pal[i];
+      const dr = r - p[0], dg = g - p[1], db = b - p[2];
+      const d = 2 * dr * dr + 4 * dg * dg + 3 * db * db;
+      if (d < bd) { bd = d; bi = i; }
+    }
+    return bi;
+  }
+
+  // メディアンカットで n 色に減色したパレットを作る
+  function medianCut(pts, n) {
+    if (!pts.length) return [];
+    const boxes = [pts];
+    while (boxes.length < n) {
+      let bi = -1, best = 0, bch = 0;
+      boxes.forEach((b, i) => {
+        if (b.length < 2) return;
+        for (let ch = 0; ch < 3; ch++) {
+          let lo = 255, hi = 0;
+          for (const p of b) { if (p[ch] < lo) lo = p[ch]; if (p[ch] > hi) hi = p[ch]; }
+          // 範囲の広さを優先しつつ、ピクセル数も少し考慮（目などの小さな部分の色を残すため）
+          const score = (hi - lo) * Math.sqrt(b.length);
+          if (score > best) { best = score; bi = i; bch = ch; }
+        }
+      });
+      if (bi < 0) break;
+      const b = boxes[bi].slice().sort((p, q) => p[bch] - q[bch]);
+      const m = b.length >> 1;
+      boxes.splice(bi, 1, b.slice(0, m), b.slice(m));
+    }
+    return boxes.map(b => {
+      const s = [0, 0, 0];
+      for (const p of b) { s[0] += p[0]; s[1] += p[1]; s[2] += p[2]; }
+      return s.map(v => Math.round(v / b.length));
+    });
+  }
+
+  function addOutline(data, w, h, c) {
+    const out = data.slice();
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        if (data[i]) continue;
+        if ((x > 0 && data[i - 1]) || (x < w - 1 && data[i + 1]) ||
+            (y > 0 && data[i - w]) || (y < h - 1 && data[i + w])) out[i] = c;
+      }
+    }
+    return out;
+  }
 
   // ---- 保存/復元 ----
   function save() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ size, pixels, color }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ W, H, frames, cur, color, fps }));
     } catch (e) { /* 保存できない環境では無視 */ }
   }
   function load() {
     try {
-      const data = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      if (data && Array.isArray(data.pixels) && data.pixels.length === data.size * data.size) {
-        size = data.size;
-        pixels = data.pixels;
-        if (data.color) color = data.color;
+      const d = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      if (d && d.W > 0 && d.H > 0 && Array.isArray(d.frames) && d.frames.length &&
+          d.frames.every(f => Array.isArray(f) && f.length === d.W * d.H)) {
+        W = d.W; H = d.H; frames = d.frames;
+        cur = Math.min(Math.max(0, d.cur | 0), frames.length - 1);
+        if (d.color) color = d.color;
+        if (d.fps) fps = d.fps;
+        return;
+      }
+      // 旧バージョン（1枚だけの正方形）からの引き継ぎ
+      const o = JSON.parse(localStorage.getItem(OLD_STORAGE_KEY));
+      if (o && Array.isArray(o.pixels) && o.pixels.length === o.size * o.size) {
+        W = H = o.size; frames = [o.pixels];
+        if (o.color) color = o.color;
       }
     } catch (e) { /* 破損データ等は無視 */ }
   }
 
   // ---- 履歴 ----
+  // 変更前に呼ぶ。フレーム配列は変更時にコピーするので、履歴は参照を持つだけで済む
   function pushHistory() {
-    undoStack.push({ size, pixels: pixels.slice() });
-    if (undoStack.length > 200) undoStack.shift();
+    undoStack.push({ W, H, cur, frames });
+    if (undoStack.length > 100) undoStack.shift();
     redoStack = [];
+    frames = frames.slice();
+    frames[cur] = frames[cur].slice();
     updateHistoryButtons();
   }
   function restore(from, to) {
     if (!from.length) return;
-    to.push({ size, pixels: pixels.slice() });
-    const s = from.pop();
-    size = s.size;
-    pixels = s.pixels;
-    sizeSel.value = String(size);
-    resizeCanvas();
-    render();
-    updateHistoryButtons();
-    save();
+    to.push({ W, H, cur, frames });
+    ({ W, H, cur, frames } = from.pop());
+    refreshAll();
   }
   function updateHistoryButtons() {
-    document.getElementById('undo').disabled = !undoStack.length;
-    document.getElementById('redo').disabled = !redoStack.length;
+    $('undo').disabled = !undoStack.length;
+    $('redo').disabled = !redoStack.length;
   }
 
   // ---- 描画 ----
   let cell = 1;
-  function resizeCanvas() {
-    // 1セルあたりの実ピクセル数。グリッド線を綺麗に描くため整数にする
-    cell = Math.max(4, Math.floor(1024 / size));
-    canvas.width = canvas.height = cell * size;
-    for (const [pv, s] of previews) {
-      pv.width = pv.height = size;
-      pv.style.width = pv.style.height = size * s + 'px';
+  let lastAvail = 0;
+  function layout() {
+    const avail = Math.min(stageWrap.clientWidth, 600);
+    lastAvail = stageWrap.clientWidth;
+    const maxH = Math.max(220, Math.min(600, window.innerHeight * 0.65));
+    const scale = Math.min(avail / W, maxH / H);
+    stage.style.width = Math.floor(scale * W) + 'px';
+    stage.style.height = Math.floor(scale * H) + 'px';
+    // グリッド線をくっきり描くため、1セルの実ピクセル数を整数にする
+    cell = Math.max(1, Math.round(scale * (window.devicePixelRatio || 1)));
+    canvas.width = cell * W;
+    canvas.height = cell * H;
+
+    pv1.width = pv2.width = animCanvas.width = W;
+    pv1.height = pv2.height = animCanvas.height = H;
+    pv1.style.width = W + 'px'; pv1.style.height = H + 'px';
+    pv2.style.width = W * 2 + 'px'; pv2.style.height = H * 2 + 'px';
+    const as = Math.max(1, Math.floor(112 / Math.max(W, H)));
+    animCanvas.style.width = W * as + 'px'; animCanvas.style.height = H * as + 'px';
+    $('rotate').disabled = W !== H;
+    render();
+  }
+  new ResizeObserver(() => { if (stageWrap.clientWidth !== lastAvail) layout(); }).observe(stageWrap);
+  window.addEventListener('resize', layout);
+
+  function drawPixels(c, data, s, ox = 0) {
+    for (let i = 0; i < data.length; i++) {
+      const col = data[i];
+      if (!col) continue;
+      c.fillStyle = col;
+      c.fillRect(ox + (i % W) * s, Math.floor(i / W) * s, s, s);
     }
   }
 
-  function render(overlay) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const draw = overlay ? merged(overlay) : pixels;
-    for (let i = 0; i < draw.length; i++) {
-      const c = draw[i];
-      if (!c) continue;
-      ctx.fillStyle = c;
-      ctx.fillRect((i % size) * cell, Math.floor(i / size) * cell, cell, cell);
-    }
-    if (showGrid.checked) {
-      ctx.strokeStyle = 'rgba(128,128,140,0.35)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      for (let i = 1; i < size; i++) {
-        const p = i * cell + 0.5;
-        ctx.moveTo(p, 0); ctx.lineTo(p, canvas.height);
-        ctx.moveTo(0, p); ctx.lineTo(canvas.width, p);
-      }
-      ctx.stroke();
-      if (size >= 16) {
-        // 8マスごとに少し濃い線
-        ctx.strokeStyle = 'rgba(128,128,140,0.7)';
-        ctx.beginPath();
-        for (let i = 8; i < size; i += 8) {
-          const p = i * cell + 0.5;
-          ctx.moveTo(p, 0); ctx.lineTo(p, canvas.height);
-          ctx.moveTo(0, p); ctx.lineTo(canvas.width, p);
-        }
-        ctx.stroke();
-      }
-    }
-    renderPreviews(draw);
-  }
-
-  function renderPreviews(draw) {
-    const img = toImageData(draw);
-    for (const [pv] of previews) pv.getContext('2d').putImageData(img, 0, 0);
-  }
-
-  function toImageData(draw) {
-    const img = new ImageData(size, size);
-    for (let i = 0; i < draw.length; i++) {
-      const c = draw[i];
+  function toImageData(data) {
+    const img = new ImageData(W, H);
+    for (let i = 0; i < data.length; i++) {
+      const c = data[i];
       if (!c) continue;
       const n = parseInt(c.slice(1), 16);
       img.data[i * 4] = n >> 16;
@@ -390,26 +691,125 @@
     return img;
   }
 
+  function render(overlay) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (onion.checked && frames.length > 1) {
+      ctx.globalAlpha = 0.25;
+      drawPixels(ctx, frames[(cur - 1 + frames.length) % frames.length], cell);
+      ctx.globalAlpha = 1;
+    }
+    const draw = overlay ? merged(overlay) : frames[cur];
+    drawPixels(ctx, draw, cell);
+    if (showGrid.checked && cell >= 4) drawGrid();
+
+    const img = toImageData(draw);
+    pv1.getContext('2d').putImageData(img, 0, 0);
+    pv2.getContext('2d').putImageData(img, 0, 0);
+    const thumb = framesEl.children[cur] && framesEl.children[cur].querySelector('canvas');
+    if (thumb && thumb.width === W && thumb.height === H) thumb.getContext('2d').putImageData(img, 0, 0);
+    if (!playing) drawAnim(cur);
+  }
+
+  function drawGrid() {
+    const line = (step, style) => {
+      ctx.strokeStyle = style;
+      ctx.beginPath();
+      for (let i = step; i < W; i += step) { const p = i * cell + 0.5; ctx.moveTo(p, 0); ctx.lineTo(p, canvas.height); }
+      for (let i = step; i < H; i += step) { const p = i * cell + 0.5; ctx.moveTo(0, p); ctx.lineTo(canvas.width, p); }
+      ctx.stroke();
+    };
+    ctx.lineWidth = 1;
+    line(1, 'rgba(128,128,140,0.35)');
+    if (Math.max(W, H) >= 16) line(8, 'rgba(128,128,140,0.75)');
+  }
+
   // 図形ツールのプレビュー用: Map(index -> color) を重ねる
   function merged(overlay) {
-    const out = pixels.slice();
+    const out = frames[cur].slice();
     for (const [i, c] of overlay) out[i] = c;
     return out;
+  }
+
+  function renderFrames() {
+    framesEl.innerHTML = '';
+    const s = 48 / Math.max(W, H);
+    frames.forEach((f, i) => {
+      const b = document.createElement('button');
+      b.className = 'thumb' + (i === cur ? ' sel' : '');
+      b.title = `${i + 1}コマ目`;
+      const c = document.createElement('canvas');
+      c.width = W; c.height = H;
+      c.style.width = W * s + 'px'; c.style.height = H * s + 'px';
+      c.getContext('2d').putImageData(toImageData(f), 0, 0);
+      const n = document.createElement('span');
+      n.textContent = i + 1;
+      b.append(c, n);
+      b.addEventListener('click', () => selectFrame(i));
+      framesEl.append(b);
+    });
+    framesEl.children[cur].scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    $('frameDel').disabled = frames.length < 2;
+    $('frameLeft').disabled = cur === 0;
+    $('frameRight').disabled = cur === frames.length - 1;
+  }
+
+  function renderUsed() {
+    const set = new Set();
+    for (const f of frames) for (const c of f) if (c) set.add(c);
+    usedEl.innerHTML = '';
+    const list = [...set].slice(0, 64);
+    if (!list.length) {
+      usedEl.innerHTML = '<span class="hint" style="grid-column:1/-1;margin:0">まだ何も描かれていません</span>';
+      return;
+    }
+    for (const c of list) usedEl.append(makeSwatch(c));
+  }
+
+  function setStatus(p) {
+    const base = `${W}×${H}　${cur + 1}/${frames.length}コマ`;
+    statusEl.textContent = p ? `x: ${p[0]}  y: ${p[1]}　${base}` : base;
+  }
+
+  function syncSizeUI() {
+    const v = `${W}x${H}`;
+    const known = [...sizeSel.options].some(o => o.value === v);
+    sizeSel.value = known ? v : 'custom';
+    $('customSize').hidden = known;
+    $('customW').value = W;
+    $('customH').value = H;
+  }
+
+  // 状態を丸ごと入れ替えたあとの再描画
+  function refreshAll() {
+    syncSizeUI();
+    renderFrames();
+    layout();
+    renderUsed();
+    updateHistoryButtons();
+    setStatus();
+    save();
+  }
+
+  // 1回の操作が終わったあとの更新
+  function changed() {
+    render();
+    renderUsed();
+    save();
   }
 
   // ---- ピクセル操作 ----
   function mirrored(x, y) {
     const pts = [[x, y]];
-    if (mirrorX.checked) pts.push([size - 1 - x, y]);
-    if (mirrorY.checked) pts.push([x, size - 1 - y]);
-    if (mirrorX.checked && mirrorY.checked) pts.push([size - 1 - x, size - 1 - y]);
+    if (mirrorX.checked) pts.push([W - 1 - x, y]);
+    if (mirrorY.checked) pts.push([x, H - 1 - y]);
+    if (mirrorX.checked && mirrorY.checked) pts.push([W - 1 - x, H - 1 - y]);
     return pts;
   }
   function plot(target, x, y, c) {
     for (const [px, py] of mirrored(x, y)) {
-      if (px < 0 || py < 0 || px >= size || py >= size) continue;
-      if (target instanceof Map) target.set(py * size + px, c);
-      else target[py * size + px] = c;
+      if (px < 0 || py < 0 || px >= W || py >= H) continue;
+      if (target instanceof Map) target.set(py * W + px, c);
+      else target[py * W + px] = c;
     }
   }
 
@@ -460,30 +860,47 @@
   }
 
   function floodFill(x, y, c) {
-    const target = pixels[y * size + x];
+    const px = frames[cur];
+    const target = px[y * W + x];
     if (target === c) return;
     const stack = [[x, y]];
     while (stack.length) {
-      const [px, py] = stack.pop();
-      if (px < 0 || py < 0 || px >= size || py >= size) continue;
-      const i = py * size + px;
-      if (pixels[i] !== target) continue;
-      pixels[i] = c;
-      stack.push([px + 1, py], [px - 1, py], [px, py + 1], [px, py - 1]);
+      const [qx, qy] = stack.pop();
+      if (qx < 0 || qy < 0 || qx >= W || qy >= H) continue;
+      const i = qy * W + qx;
+      if (px[i] !== target) continue;
+      px[i] = c;
+      stack.push([qx + 1, qy], [qx - 1, qy], [qx, qy + 1], [qx, qy - 1]);
     }
   }
 
+  // 全フレームを新しいサイズにする（中央そろえ）
+  function resizeFrames(nw, nh) {
+    const ox = Math.floor((nw - W) / 2), oy = Math.floor((nh - H) / 2);
+    frames = frames.map(f => {
+      const next = blank(nw, nh);
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const nx = x + ox, ny = y + oy;
+          if (nx >= 0 && ny >= 0 && nx < nw && ny < nh) next[ny * nw + nx] = f[y * W + x];
+        }
+      }
+      return next;
+    });
+    W = nw; H = nh;
+  }
+
   // ---- 入力 ----
-  let drag = null; // { start:[x,y], last:[x,y], c, tool }
+  let drag = null; // { start, last, c, tool, overlay }
 
   function cellAt(e) {
     const r = canvas.getBoundingClientRect();
     return [
-      Math.floor((e.clientX - r.left) / r.width * size),
-      Math.floor((e.clientY - r.top) / r.height * size),
+      Math.floor((e.clientX - r.left) / r.width * W),
+      Math.floor((e.clientY - r.top) / r.height * H),
     ];
   }
-  const inBounds = ([x, y]) => x >= 0 && y >= 0 && x < size && y < size;
+  const inBounds = ([x, y]) => x >= 0 && y >= 0 && x < W && y < H;
 
   canvas.addEventListener('contextmenu', e => e.preventDefault());
 
@@ -492,11 +909,10 @@
     if (!inBounds(p)) return;
     canvas.setPointerCapture(e.pointerId);
     const [x, y] = p;
-    let t = tool;
-    if (e.button === 2 || e.altKey) t = 'picker';
+    const t = (e.button === 2 || e.altKey) ? 'picker' : tool;
 
     if (t === 'picker') {
-      const c = pixels[y * size + x];
+      const c = frames[cur][y * W + x];
       if (c) setColor(c); else setTool('eraser');
       return;
     }
@@ -504,12 +920,12 @@
     const c = t === 'eraser' ? null : color;
     if (t === 'fill') {
       floodFill(x, y, c);
-      render(); save();
+      changed();
       return;
     }
     drag = { start: p, last: p, c, tool: t };
     if (t === 'pen' || t === 'eraser') {
-      plot(pixels, x, y, c);
+      plot(frames[cur], x, y, c);
       render();
     } else {
       updateShape(p);
@@ -518,11 +934,11 @@
 
   canvas.addEventListener('pointermove', e => {
     const p = cellAt(e);
-    statusEl.textContent = inBounds(p) ? `x: ${p[0]}  y: ${p[1]}  /  ${size}×${size}` : `${size}×${size}`;
+    setStatus(inBounds(p) ? p : null);
     if (!drag) return;
     if (drag.tool === 'pen' || drag.tool === 'eraser') {
       // 速く動かしても途切れないように前回位置から線で結ぶ
-      for (const [x, y] of linePoints(drag.last[0], drag.last[1], p[0], p[1])) plot(pixels, x, y, drag.c);
+      for (const [x, y] of linePoints(drag.last[0], drag.last[1], p[0], p[1])) plot(frames[cur], x, y, drag.c);
       drag.last = p;
       render();
     } else {
@@ -547,21 +963,20 @@
 
   function endDrag() {
     if (!drag) return;
-    if (drag.overlay) for (const [i, c] of drag.overlay) pixels[i] = c;
+    if (drag.overlay) for (const [i, c] of drag.overlay) frames[cur][i] = c;
     drag = null;
-    render();
-    save();
+    changed();
   }
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
-  canvas.addEventListener('pointerleave', () => { if (!drag) statusEl.textContent = `${size}×${size}`; });
+  canvas.addEventListener('pointerleave', () => { if (!drag) setStatus(); });
 
   // ---- UI ----
   function setTool(t) {
     tool = t;
     for (const b of document.querySelectorAll('#tools button')) b.classList.toggle('on', b.dataset.tool === t);
   }
-  document.getElementById('tools').addEventListener('click', e => {
+  $('tools').addEventListener('click', e => {
     const b = e.target.closest('button');
     if (b) setTool(b.dataset.tool);
   });
@@ -569,130 +984,538 @@
   function setColor(c) {
     color = c;
     colorInput.value = c;
-    colorHex.textContent = c;
+    $('colorHex').textContent = c;
     for (const s of paletteEl.children) s.classList.toggle('sel', s.dataset.color === c);
     if (tool === 'eraser' || tool === 'picker') setTool('pen');
     save();
   }
   colorInput.addEventListener('input', () => setColor(colorInput.value));
 
-  PALETTE.forEach(c => {
+  function makeSwatch(c) {
     const b = document.createElement('button');
     b.className = 'swatch' + (c ? '' : ' transparent');
     b.title = c || '透明 (消しゴム)';
     if (c) { b.style.background = c; b.dataset.color = c; }
     b.addEventListener('click', () => c ? setColor(c) : setTool('eraser'));
-    paletteEl.appendChild(b);
-  });
+    return b;
+  }
+  PALETTE.forEach(c => paletteEl.append(makeSwatch(c)));
 
-  sizeSel.addEventListener('change', () => {
-    const n = Number(sizeSel.value);
-    if (n === size) return;
+  function changeSize(nw, nh) {
+    nw = Math.max(1, Math.min(128, nw | 0));
+    nh = Math.max(1, Math.min(128, nh | 0));
+    if (nw === W && nh === H) return syncSizeUI();
     pushHistory();
-    const next = new Array(n * n).fill(null);
-    for (let y = 0; y < Math.min(n, size); y++)
-      for (let x = 0; x < Math.min(n, size); x++) next[y * n + x] = pixels[y * size + x];
-    size = n;
-    pixels = next;
-    resizeCanvas(); render(); save();
+    resizeFrames(nw, nh);
+    refreshAll();
+  }
+  sizeSel.addEventListener('change', () => {
+    if (sizeSel.value === 'custom') {
+      $('customSize').hidden = false;
+      return;
+    }
+    const [nw, nh] = sizeSel.value.split('x').map(Number);
+    changeSize(nw, nh);
   });
+  $('applySize').onclick = () => changeSize(Number($('customW').value), Number($('customH').value));
 
   showGrid.addEventListener('change', () => render());
+  onion.addEventListener('change', () => render());
 
   function transform(fn) {
     pushHistory();
-    const next = new Array(size * size).fill(null);
-    for (let y = 0; y < size; y++)
-      for (let x = 0; x < size; x++) {
+    const src = frames[cur];
+    const next = blank();
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
         const [nx, ny] = fn(x, y);
-        if (nx >= 0 && ny >= 0 && nx < size && ny < size) next[ny * size + nx] = pixels[y * size + x];
+        if (nx >= 0 && ny >= 0 && nx < W && ny < H) next[ny * W + nx] = src[y * W + x];
       }
-    pixels = next;
-    render(); save();
+    }
+    frames[cur] = next;
+    changed();
   }
-  const N = () => size - 1;
-  document.getElementById('flipH').onclick = () => transform((x, y) => [N() - x, y]);
-  document.getElementById('flipV').onclick = () => transform((x, y) => [x, N() - y]);
-  document.getElementById('rotate').onclick = () => transform((x, y) => [N() - y, x]);
-  document.getElementById('shiftL').onclick = () => transform((x, y) => [(x - 1 + size) % size, y]);
-  document.getElementById('shiftR').onclick = () => transform((x, y) => [(x + 1) % size, y]);
-  document.getElementById('shiftU').onclick = () => transform((x, y) => [x, (y - 1 + size) % size]);
-  document.getElementById('shiftD').onclick = () => transform((x, y) => [x, (y + 1) % size]);
-  document.getElementById('clear').onclick = () => {
-    if (!pixels.some(Boolean)) return;
+  $('flipH').onclick = () => transform((x, y) => [W - 1 - x, y]);
+  $('flipV').onclick = () => transform((x, y) => [x, H - 1 - y]);
+  $('rotate').onclick = () => transform((x, y) => [W - 1 - y, x]);
+  $('shiftL').onclick = () => transform((x, y) => [(x - 1 + W) % W, y]);
+  $('shiftR').onclick = () => transform((x, y) => [(x + 1) % W, y]);
+  $('shiftU').onclick = () => transform((x, y) => [x, (y - 1 + H) % H]);
+  $('shiftD').onclick = () => transform((x, y) => [x, (y + 1) % H]);
+  $('clear').onclick = () => {
+    if (!frames[cur].some(Boolean)) return;
     pushHistory();
-    pixels = new Array(size * size).fill(null);
-    render(); save();
+    frames[cur] = blank();
+    changed();
   };
-  document.getElementById('undo').onclick = () => restore(undoStack, redoStack);
-  document.getElementById('redo').onclick = () => restore(redoStack, undoStack);
+  $('outline').onclick = () => {
+    if (!frames[cur].some(Boolean)) return;
+    pushHistory();
+    frames[cur] = addOutline(frames[cur], W, H, color);
+    changed();
+  };
+  $('undo').onclick = () => restore(undoStack, redoStack);
+  $('redo').onclick = () => restore(redoStack, undoStack);
 
-  // PNG書き出し
-  document.getElementById('download').onclick = () => {
-    const s = Number(document.getElementById('scale').value);
-    const out = document.createElement('canvas');
-    out.width = out.height = size * s;
-    const o = out.getContext('2d');
-    pixels.forEach((c, i) => {
-      if (!c) return;
-      o.fillStyle = c;
-      o.fillRect((i % size) * s, Math.floor(i / size) * s, s, s);
-    });
-    out.toBlob(blob => {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `pixel-icon-${size}x${size}${s > 1 ? '@' + s + 'x' : ''}.png`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    }, 'image/png');
+  $('loadTemplate').onclick = () => {
+    const t = TEMPLATES[$('template').value];
+    pushHistory();
+    H = t.frames[0].length;
+    W = t.frames[0][0].length;
+    frames = t.frames.map(rows => rows.join('').split('').map(ch => t.colors[ch] || null));
+    cur = 0;
+    refreshAll();
   };
 
-  // 画像読み込み → 縮小してドット化
-  const importFile = document.getElementById('importFile');
-  document.getElementById('importBtn').onclick = () => importFile.click();
-  importFile.addEventListener('change', () => {
-    const f = importFile.files[0];
-    if (!f) return;
-    const img = new Image();
-    img.onload = () => {
-      const tmp = document.createElement('canvas');
-      tmp.width = tmp.height = size;
-      const t = tmp.getContext('2d');
-      // 正方形に中央トリミング
-      const side = Math.min(img.width, img.height);
-      t.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, size, size);
-      const d = t.getImageData(0, 0, size, size).data;
-      pushHistory();
-      pixels = pixels.map((_, i) => d[i * 4 + 3] < 128 ? null :
-        '#' + [0, 1, 2].map(k => d[i * 4 + k].toString(16).padStart(2, '0')).join(''));
-      render(); save();
-      URL.revokeObjectURL(img.src);
-      importFile.value = '';
-    };
-    img.src = URL.createObjectURL(f);
+  // ---- フレーム ----
+  function selectFrame(i) {
+    cur = (i + frames.length) % frames.length;
+    renderFrames();
+    render();
+    setStatus();
+    save();
+  }
+  $('frameAdd').onclick = () => { pushHistory(); frames.splice(cur + 1, 0, blank()); cur++; refreshAll(); };
+  $('frameDup').onclick = () => { pushHistory(); frames.splice(cur + 1, 0, frames[cur].slice()); cur++; refreshAll(); };
+  $('frameDel').onclick = () => {
+    if (frames.length < 2) return;
+    pushHistory();
+    frames.splice(cur, 1);
+    cur = Math.min(cur, frames.length - 1);
+    refreshAll();
+  };
+  function moveFrame(d) {
+    const j = cur + d;
+    if (j < 0 || j >= frames.length) return;
+    pushHistory();
+    [frames[cur], frames[j]] = [frames[j], frames[cur]];
+    cur = j;
+    refreshAll();
+  }
+  $('frameLeft').onclick = () => moveFrame(-1);
+  $('frameRight').onclick = () => moveFrame(1);
+
+  // ---- アニメーションプレビュー ----
+  let playing = true, animIndex = 0, lastTick = 0;
+  function drawAnim(i) {
+    const f = frames[i % frames.length];
+    if (animCanvas.width === W && animCanvas.height === H) animCanvas.getContext('2d').putImageData(toImageData(f), 0, 0);
+  }
+  function tick(t) {
+    requestAnimationFrame(tick);
+    if (!playing || t - lastTick < 1000 / fps) return;
+    lastTick = t;
+    animIndex = (animIndex + 1) % frames.length;
+    drawAnim(animIndex);
+  }
+  requestAnimationFrame(tick);
+  $('play').onclick = () => {
+    playing = !playing;
+    $('play').textContent = playing ? '⏸ 停止' : '▶ 再生';
+    if (!playing) drawAnim(cur);
+  };
+  const fpsInput = $('fps');
+  fpsInput.addEventListener('input', () => {
+    fps = Number(fpsInput.value);
+    $('fpsLabel').textContent = fps + 'fps';
+    save();
   });
 
-  // キーボード
+  // ---- 書き出し ----
+  function downloadBlob(blob, name) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  const scaleValue = () => Number($('scale').value);
+  const suffix = s => (s > 1 ? `@${s}x` : '');
+
+  $('download').onclick = () => {
+    const s = scaleValue();
+    const out = document.createElement('canvas');
+    out.width = W * s; out.height = H * s;
+    drawPixels(out.getContext('2d'), frames[cur], s);
+    out.toBlob(b => downloadBlob(b, `pixel-${W}x${H}${suffix(s)}.png`), 'image/png');
+  };
+  $('sheet').onclick = () => {
+    const s = scaleValue();
+    const out = document.createElement('canvas');
+    out.width = W * s * frames.length; out.height = H * s;
+    const o = out.getContext('2d');
+    frames.forEach((f, i) => drawPixels(o, f, s, i * W * s));
+    out.toBlob(b => downloadBlob(b, `sprite-${W}x${H}-${frames.length}f${suffix(s)}.png`), 'image/png');
+  };
+  $('gif').onclick = () => {
+    const s = scaleValue();
+    downloadBlob(new Blob([encodeGif(frames, s, fps)], { type: 'image/gif' }), `anim-${W}x${H}${suffix(s)}.gif`);
+  };
+
+  // GIF89a エンコーダ（透明色はインデックス0）
+  function encodeGif(frs, s, rate) {
+    let colors = [...new Set(frs.flat().filter(Boolean))];
+    let index;
+    if (colors.length > 255) {
+      const pal = medianCut(colors.map(hexToRgb), 255);
+      index = new Map(colors.map(c => { const [r, g, b] = hexToRgb(c); return [c, nearest(r, g, b, pal) + 1]; }));
+      colors = pal.map(rgbToHex);
+    } else {
+      index = new Map(colors.map((c, i) => [c, i + 1]));
+    }
+    let bits = 1;
+    while ((1 << bits) < colors.length + 1) bits++;
+    const w = W * s, h = H * s;
+    const out = [];
+    const str = t => { for (const ch of t) out.push(ch.charCodeAt(0)); };
+    const u16 = v => out.push(v & 255, (v >> 8) & 255);
+
+    str('GIF89a');
+    u16(w); u16(h);
+    out.push(0x80 | ((bits - 1) << 4) | (bits - 1), 0, 0);
+    for (let i = 0; i < (1 << bits); i++) {
+      const c = i > 0 && colors[i - 1];
+      out.push(...(c ? hexToRgb(c) : [0, 0, 0]));
+    }
+    // 無限ループ
+    out.push(0x21, 0xFF, 0x0B); str('NETSCAPE2.0'); out.push(3, 1, 0, 0, 0);
+
+    const delay = Math.max(2, Math.round(100 / rate));
+    const minCode = Math.max(2, bits);
+    for (const f of frs) {
+      // 表示後に背景へ戻す（透明部分に前のコマが残らないように）
+      out.push(0x21, 0xF9, 4, (2 << 2) | 1); u16(delay); out.push(0, 0);
+      out.push(0x2C); u16(0); u16(0); u16(w); u16(h); out.push(0);
+      const idx = new Uint8Array(w * h);
+      for (let y = 0; y < h; y++) {
+        const row = Math.floor(y / s) * W;
+        for (let x = 0; x < w; x++) {
+          const c = f[row + Math.floor(x / s)];
+          idx[y * w + x] = c ? index.get(c) : 0;
+        }
+      }
+      out.push(minCode);
+      const data = lzw(idx, minCode);
+      for (let i = 0; i < data.length; i += 255) {
+        const chunk = data.slice(i, i + 255);
+        out.push(chunk.length);
+        for (const v of chunk) out.push(v);
+      }
+      out.push(0);
+    }
+    out.push(0x3B);
+    return new Uint8Array(out);
+  }
+
+  function lzw(idx, minCode) {
+    const clear = 1 << minCode, eoi = clear + 1;
+    let size = minCode + 1, next = eoi + 1;
+    let dict = new Map();
+    const out = [];
+    let acc = 0, nb = 0;
+    const emit = c => {
+      acc |= c << nb;
+      nb += size;
+      while (nb >= 8) { out.push(acc & 255); acc >>>= 8; nb -= 8; }
+    };
+    emit(clear);
+    let prefix = idx[0];
+    for (let i = 1; i < idx.length; i++) {
+      const k = idx[i];
+      const key = (prefix << 8) | k;
+      const v = dict.get(key);
+      if (v !== undefined) { prefix = v; continue; }
+      emit(prefix);
+      if (next === 4096) {
+        emit(clear);
+        dict = new Map();
+        next = eoi + 1;
+        size = minCode + 1;
+      } else {
+        if (next >= (1 << size)) size++;
+        dict.set(key, next++);
+      }
+      prefix = k;
+    }
+    emit(prefix);
+    emit(eoi);
+    if (nb > 0) out.push(acc & 255);
+    return out;
+  }
+
+  // ---- 画像からドット絵 ----
+  const dlg = $('imgDlg');
+  const srcImg = $('srcImg');
+  const dstCanvas = $('dstCanvas');
+  const importFile = $('importFile');
+  let srcReady = false;
+  let converted = null;
+
+  function openImport(file) {
+    $('cvW').value = W;
+    $('cvH').value = H;
+    if (!dlg.open) dlg.showModal();
+    if (file) loadFile(file);
+  }
+  $('openImport').onclick = () => openImport();
+
+  function loadFile(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    const url = URL.createObjectURL(file);
+    srcImg.onload = () => {
+      srcReady = true;
+      $('dropZone').hidden = true;
+      $('cmp').hidden = false;
+      $('cvOther').hidden = false;
+      $('cvApply').disabled = $('cvAddFrame').disabled = false;
+      updateConvert();
+    };
+    if (srcImg.src.startsWith('blob:')) URL.revokeObjectURL(srcImg.src);
+    srcImg.src = url;
+  }
+
+  const dropZone = $('dropZone');
+  dropZone.onclick = () => importFile.click();
+  $('cvOther').onclick = () => importFile.click();
+  importFile.addEventListener('change', () => { loadFile(importFile.files[0]); importFile.value = ''; });
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
+
+  // ページ全体へのドロップ・貼り付けでも読み込む
+  document.addEventListener('dragover', e => e.preventDefault());
+  document.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('over');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('image/')) openImport(f);
+  });
+  document.addEventListener('paste', e => {
+    const item = [...e.clipboardData.items].find(it => it.type.startsWith('image/'));
+    if (item) { e.preventDefault(); openImport(item.getAsFile()); }
+  });
+
+  function convertOptions() {
+    return {
+      w: Math.max(1, Math.min(128, Number($('cvW').value) | 0 || W)),
+      h: Math.max(1, Math.min(128, Number($('cvH').value) | 0 || H)),
+      crop: $('cvCrop').value,
+      palette: $('cvPalette').value,
+      colors: Number($('cvColors').value),
+      contrast: Number($('cvContrast').value),
+      saturation: Number($('cvSat').value),
+      dither: $('cvDither').checked,
+      removeBg: $('cvBg').checked,
+      bgTol: Number($('cvBgTol').value),
+      outline: $('cvOutline').checked,
+      outlineColor: $('cvOutlineColor').value,
+    };
+  }
+
+  function convertImage(img, o) {
+    const { w, h } = o;
+    const n = w * h;
+    const iw = img.naturalWidth, ih = img.naturalHeight;
+
+    // 元画像のどこを、出力のどこに描くか
+    let sx = 0, sy = 0, sw = iw, sh = ih, dx = 0, dy = 0, dw = w, dh = h;
+    if (o.crop === 'fill') {
+      const r = Math.max(w / iw, h / ih);
+      sw = w / r; sh = h / r; sx = (iw - sw) / 2; sy = (ih - sh) / 2;
+    } else if (o.crop === 'fit') {
+      const r = Math.min(w / iw, h / ih);
+      dw = Math.max(1, Math.round(iw * r)); dh = Math.max(1, Math.round(ih * r));
+      dx = Math.floor((w - dw) / 2); dy = Math.floor((h - dh) / 2);
+    }
+
+    // k倍で描いてから k×k ブロックの平均を取る（ギザギザの少ない縮小）
+    const k = Math.max(1, Math.min(8, Math.floor(Math.min(sw / dw, sh / dh))));
+    const c = document.createElement('canvas');
+    c.width = w * k; c.height = h * k;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    g.imageSmoothingEnabled = true;
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(img, sx, sy, sw, sh, dx * k, dy * k, dw * k, dh * k);
+    const d = g.getImageData(0, 0, w * k, h * k).data;
+
+    const R = new Float32Array(n), G = new Float32Array(n), B = new Float32Array(n), A = new Float32Array(n);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        let sr = 0, sg = 0, sb = 0, sa = 0;
+        for (let yy = 0; yy < k; yy++) {
+          for (let xx = 0; xx < k; xx++) {
+            const j = ((y * k + yy) * w * k + x * k + xx) * 4;
+            const a = d[j + 3];
+            sr += d[j] * a; sg += d[j + 1] * a; sb += d[j + 2] * a; sa += a;
+          }
+        }
+        const i = y * w + x;
+        A[i] = sa / (k * k);
+        if (sa > 0) { R[i] = sr / sa; G[i] = sg / sa; B[i] = sb / sa; }
+      }
+    }
+
+    // コントラスト・鮮やかさ
+    const cf = 1 + o.contrast / 100, sf = 1 + o.saturation / 100;
+    for (let i = 0; i < n; i++) {
+      let r = (R[i] - 128) * cf + 128, gg = (G[i] - 128) * cf + 128, b = (B[i] - 128) * cf + 128;
+      const l = 0.299 * r + 0.587 * gg + 0.114 * b;
+      R[i] = clamp(l + (r - l) * sf); G[i] = clamp(l + (gg - l) * sf); B[i] = clamp(l + (b - l) * sf);
+    }
+
+    const opaque = new Uint8Array(n);
+    for (let i = 0; i < n; i++) opaque[i] = A[i] >= 128 ? 1 : 0;
+
+    // 背景除去: 外周から、角の色に近い部分を塗りつぶすように透明にする
+    if (o.removeBg) {
+      const corners = [[dx, dy], [dx + dw - 1, dy], [dx, dy + dh - 1], [dx + dw - 1, dy + dh - 1]]
+        .map(([x, y]) => y * w + x).filter(i => opaque[i]);
+      if (corners.length) {
+        const bgs = corners.map(i => [R[i], G[i], B[i]]);
+        const lim = (o.bgTol * 2.5) ** 2;
+        const isBg = i => opaque[i] && bgs.some(([r, gg, b]) => (R[i] - r) ** 2 + (G[i] - gg) ** 2 + (B[i] - b) ** 2 <= lim);
+        const stack = [];
+        for (let x = dx; x < dx + dw; x++) stack.push(dy * w + x, (dy + dh - 1) * w + x);
+        for (let y = dy; y < dy + dh; y++) stack.push(y * w + dx, y * w + dx + dw - 1);
+        while (stack.length) {
+          const i = stack.pop();
+          if (!isBg(i)) continue;
+          opaque[i] = 0;
+          const x = i % w, y = (i / w) | 0;
+          if (x > 0) stack.push(i - 1);
+          if (x < w - 1) stack.push(i + 1);
+          if (y > 0) stack.push(i - w);
+          if (y < h - 1) stack.push(i + w);
+        }
+        // 背景と絵の境目に残る中間色のふち（アンチエイリアス）も消す
+        const fringe = [];
+        for (let i = 0; i < n; i++) {
+          if (!opaque[i]) continue;
+          const x = i % w, y = (i / w) | 0;
+          const nextToBg = (x > 0 && !opaque[i - 1]) || (x < w - 1 && !opaque[i + 1]) ||
+                           (y > 0 && !opaque[i - w]) || (y < h - 1 && !opaque[i + w]);
+          if (nextToBg && bgs.some(([r, gg, b]) => (R[i] - r) ** 2 + (G[i] - gg) ** 2 + (B[i] - b) ** 2 <= lim * 4)) fringe.push(i);
+        }
+        for (const i of fringe) opaque[i] = 0;
+      }
+    }
+
+    // 減色
+    let pal;
+    if (o.palette === 'auto') {
+      const pts = [];
+      for (let i = 0; i < n; i++) if (opaque[i]) pts.push([R[i], G[i], B[i]]);
+      pal = medianCut(pts, o.colors);
+    } else {
+      pal = PALETTES[o.palette].map(hexToRgb);
+    }
+    const res = new Array(n).fill(null);
+    if (pal.length) {
+      const spread = (x, y, er, eg, eb, f) => {
+        if (x < 0 || x >= w || y >= h) return;
+        const j = y * w + x;
+        if (!opaque[j]) return;
+        R[j] += er * f; G[j] += eg * f; B[j] += eb * f;
+      };
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const i = y * w + x;
+          if (!opaque[i]) continue;
+          const r = clamp(R[i]), gg = clamp(G[i]), b = clamp(B[i]);
+          const p = pal[nearest(r, gg, b, pal)];
+          res[i] = rgbToHex(p);
+          if (o.dither) {
+            // Floyd–Steinberg
+            const er = r - p[0], eg = gg - p[1], eb = b - p[2];
+            spread(x + 1, y, er, eg, eb, 7 / 16);
+            spread(x - 1, y + 1, er, eg, eb, 3 / 16);
+            spread(x, y + 1, er, eg, eb, 5 / 16);
+            spread(x + 1, y + 1, er, eg, eb, 1 / 16);
+          }
+        }
+      }
+    }
+
+    return o.outline ? addOutline(res, w, h, o.outlineColor) : res;
+  }
+
+  let convertQueued = false;
+  function updateConvert() {
+    $('cvColors').disabled = $('cvPalette').value !== 'auto';
+    $('cvColorsLabel').textContent = $('cvColors').value + '色';
+    $('cvBgTol').disabled = !$('cvBg').checked;
+    if (!srcReady || convertQueued) return;
+    convertQueued = true;
+    requestAnimationFrame(() => {
+      convertQueued = false;
+      const o = convertOptions();
+      converted = { w: o.w, h: o.h, pixels: convertImage(srcImg, o) };
+      dstCanvas.width = o.w; dstCanvas.height = o.h;
+      const s = 160 / Math.max(o.w, o.h);
+      dstCanvas.style.width = o.w * s + 'px';
+      dstCanvas.style.height = o.h * s + 'px';
+      const img = new ImageData(o.w, o.h);
+      converted.pixels.forEach((c, i) => {
+        if (!c) return;
+        const [r, g, b] = hexToRgb(c);
+        img.data.set([r, g, b, 255], i * 4);
+      });
+      dstCanvas.getContext('2d').putImageData(img, 0, 0);
+      const count = new Set(converted.pixels.filter(Boolean)).size;
+      $('dstInfo').textContent = `変換後 ${o.w}×${o.h}・${count}色` + (o.w !== W || o.h !== H ? '（キャンバスのサイズも変わります）' : '');
+    });
+  }
+  for (const id of ['cvW', 'cvH', 'cvCrop', 'cvPalette', 'cvColors', 'cvContrast', 'cvSat', 'cvDither', 'cvBg', 'cvBgTol', 'cvOutline', 'cvOutlineColor']) {
+    $(id).addEventListener('input', updateConvert);
+  }
+  $('cvRatio').onclick = () => {
+    if (!srcReady) return;
+    const w = Number($('cvW').value) || W;
+    $('cvH').value = Math.max(1, Math.min(128, Math.round(w * srcImg.naturalHeight / srcImg.naturalWidth)));
+    updateConvert();
+  };
+
+  function applyConverted(asNewFrame) {
+    if (!srcReady) return;
+    const o = convertOptions();
+    const pixels = convertImage(srcImg, o);
+    pushHistory();
+    if (o.w !== W || o.h !== H) resizeFrames(o.w, o.h);
+    if (asNewFrame) { frames.splice(cur + 1, 0, pixels); cur++; }
+    else frames[cur] = pixels;
+    dlg.close();
+    refreshAll();
+  }
+  $('cvApply').onclick = () => applyConverted(false);
+  $('cvAddFrame').onclick = () => applyConverted(true);
+  $('cvCancel').onclick = () => dlg.close();
+
+  // ---- キーボード ----
   document.addEventListener('keydown', e => {
-    if (e.target.tagName === 'INPUT' && e.target.type !== 'checkbox') return;
+    if (dlg.open) return;
+    if (e.target.tagName === 'SELECT' || (e.target.tagName === 'INPUT' && e.target.type !== 'checkbox')) return;
     const k = e.key.toLowerCase();
-    if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); e.shiftKey ? restore(redoStack, undoStack) : restore(undoStack, redoStack); return; }
+    if ((e.ctrlKey || e.metaKey) && k === 'z') {
+      e.preventDefault();
+      if (e.shiftKey) restore(redoStack, undoStack); else restore(undoStack, redoStack);
+      return;
+    }
     if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); restore(redoStack, undoStack); return; }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const map = { b: 'pen', e: 'eraser', g: 'fill', i: 'picker', l: 'line', c: 'circle' };
     if (k === 'r') setTool(e.shiftKey ? 'rectfill' : 'rect');
     else if (map[k]) setTool(map[k]);
+    else if (k === ',') selectFrame(cur - 1);
+    else if (k === '.') selectFrame(cur + 1);
   });
 
   // ---- 起動 ----
   load();
-  sizeSel.value = String(size);
-  resizeCanvas();
+  fpsInput.value = fps;
+  $('fpsLabel').textContent = fps + 'fps';
   setColor(color);
   setTool('pen');
-  updateHistoryButtons();
-  render();
-  statusEl.textContent = `${size}×${size}`;
+  updateConvert();
+  refreshAll();
 })();
 </script>
 </body>
