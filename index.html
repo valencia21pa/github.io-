@@ -1,0 +1,699 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ドット絵アイコンメーカー</title>
+<style>
+  :root {
+    --bg: #f4f4f6;
+    --panel: #ffffff;
+    --text: #1d1d22;
+    --muted: #6b6b76;
+    --line: #dcdce2;
+    --accent: #4f6bed;
+    --accent-text: #ffffff;
+    --checker-a: #ffffff;
+    --checker-b: #e6e6ea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17171b;
+      --panel: #222228;
+      --text: #ececf0;
+      --muted: #9a9aa6;
+      --line: #383840;
+      --accent: #7189ff;
+      --accent-text: #0e0e12;
+      --checker-a: #3a3a42;
+      --checker-b: #2e2e35;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    font-size: 14px;
+  }
+  header {
+    padding: 16px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  header p { margin: 0; color: var(--muted); }
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 16px 32px;
+    display: grid;
+    grid-template-columns: 220px 1fr 220px;
+    gap: 16px;
+    align-items: start;
+  }
+  @media (max-width: 860px) {
+    main { grid-template-columns: 1fr; }
+    #stage-wrap { order: -1; }
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .panel h2 {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    margin: 0 0 6px;
+    letter-spacing: .04em;
+  }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  button, select, input[type=number] {
+    font: inherit;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 10px;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: .4; cursor: default; }
+  button.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  .tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .tools button { padding: 8px 0; font-size: 18px; line-height: 1; }
+  .tools button small { display: block; font-size: 10px; margin-top: 3px; }
+  #stage-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  #stage {
+    width: min(100%, 560px);
+    aspect-ratio: 1;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+    touch-action: none;
+    background:
+      conic-gradient(var(--checker-b) 25%, var(--checker-a) 0 50%, var(--checker-b) 0 75%, var(--checker-a) 0)
+      0 0 / 16px 16px;
+  }
+  #stage canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; cursor: crosshair; }
+  #status { color: var(--muted); font-variant-numeric: tabular-nums; min-height: 1.4em; }
+  .palette { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+  .swatch {
+    aspect-ratio: 1;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+    padding: 0;
+  }
+  .swatch.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .swatch.transparent {
+    background:
+      conic-gradient(#ccc 25%, #fff 0 50%, #ccc 0 75%, #fff 0) 0 0 / 8px 8px;
+  }
+  .current { display: flex; gap: 8px; align-items: center; }
+  .current input[type=color] { width: 44px; height: 32px; border: 1px solid var(--line); border-radius: 6px; padding: 0; background: none; }
+  .previews { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+  .previews canvas {
+    image-rendering: pixelated;
+    border: 1px solid var(--line);
+    background:
+      conic-gradient(var(--checker-b) 25%, var(--checker-a) 0 50%, var(--checker-b) 0 75%, var(--checker-a) 0)
+      0 0 / 8px 8px;
+  }
+  label.chk { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  .hint { color: var(--muted); font-size: 12px; line-height: 1.5; }
+  kbd { font-family: ui-monospace, monospace; font-size: 11px; border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ドット絵アイコンメーカー</h1>
+  <p>ブラウザだけで描けるピクセルアートエディタ。描いたアイコンはPNGで保存できます。</p>
+</header>
+
+<main>
+  <!-- 左: ツール -->
+  <section class="panel">
+    <div>
+      <h2>ツール</h2>
+      <div class="tools" id="tools">
+        <button data-tool="pen" title="ペン (B)">✏️<small>ペン</small></button>
+        <button data-tool="eraser" title="消しゴム (E)">🧽<small>消す</small></button>
+        <button data-tool="fill" title="塗りつぶし (G)">🪣<small>塗り</small></button>
+        <button data-tool="picker" title="スポイト (I)">💧<small>スポイト</small></button>
+        <button data-tool="line" title="直線 (L)">／<small>直線</small></button>
+        <button data-tool="rect" title="四角 (R)">▢<small>四角</small></button>
+        <button data-tool="rectfill" title="塗り四角 (Shift+R)">■<small>塗り四角</small></button>
+        <button data-tool="circle" title="円 (C)">◯<small>円</small></button>
+      </div>
+    </div>
+    <div>
+      <h2>ミラー</h2>
+      <div class="row">
+        <label class="chk"><input type="checkbox" id="mirrorX"> 左右</label>
+        <label class="chk"><input type="checkbox" id="mirrorY"> 上下</label>
+      </div>
+    </div>
+    <div>
+      <h2>編集</h2>
+      <div class="row">
+        <button id="undo" title="元に戻す (Ctrl+Z)">↶ 戻す</button>
+        <button id="redo" title="やり直す (Ctrl+Y)">↷ 進む</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button id="flipH" title="左右反転">⇋</button>
+        <button id="flipV" title="上下反転">⇵</button>
+        <button id="rotate" title="90°回転">⟳</button>
+        <button id="clear">クリア</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button id="shiftL" title="左へずらす">←</button>
+        <button id="shiftU" title="上へずらす">↑</button>
+        <button id="shiftD" title="下へずらす">↓</button>
+        <button id="shiftR" title="右へずらす">→</button>
+      </div>
+    </div>
+    <div>
+      <h2>表示</h2>
+      <label class="chk"><input type="checkbox" id="showGrid" checked> グリッド線</label>
+    </div>
+  </section>
+
+  <!-- 中央: キャンバス -->
+  <section id="stage-wrap">
+    <div id="stage"><canvas id="canvas"></canvas></div>
+    <div id="status"></div>
+  </section>
+
+  <!-- 右: 色・サイズ・出力 -->
+  <section class="panel">
+    <div>
+      <h2>色</h2>
+      <div class="current">
+        <input type="color" id="color" value="#222034">
+        <span id="colorHex" style="font-family:ui-monospace,monospace">#222034</span>
+      </div>
+      <div class="palette" id="palette" style="margin-top:8px"></div>
+    </div>
+    <div>
+      <h2>キャンバスサイズ</h2>
+      <div class="row">
+        <select id="size">
+          <option value="8">8 × 8</option>
+          <option value="16" selected>16 × 16</option>
+          <option value="24">24 × 24</option>
+          <option value="32">32 × 32</option>
+          <option value="48">48 × 48</option>
+          <option value="64">64 × 64</option>
+        </select>
+      </div>
+      <p class="hint">サイズ変更すると、今の絵は左上基準で残ります。</p>
+    </div>
+    <div>
+      <h2>プレビュー</h2>
+      <div class="previews">
+        <canvas id="pv1"></canvas>
+        <canvas id="pv2"></canvas>
+        <canvas id="pv4"></canvas>
+      </div>
+    </div>
+    <div>
+      <h2>保存</h2>
+      <div class="row">
+        <select id="scale">
+          <option value="1">等倍</option>
+          <option value="4">×4</option>
+          <option value="8" selected>×8</option>
+          <option value="16">×16</option>
+          <option value="32">×32</option>
+        </select>
+        <button id="download">PNG保存</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button id="importBtn">画像を読み込む</button>
+        <input type="file" id="importFile" accept="image/*" hidden>
+      </div>
+      <p class="hint">読み込んだ画像は現在のサイズに縮小してドット化されます。作業内容はブラウザに自動保存されます。</p>
+    </div>
+    <p class="hint">
+      <kbd>B</kbd>ペン <kbd>E</kbd>消す <kbd>G</kbd>塗り <kbd>I</kbd>スポイト <kbd>L</kbd>直線 <kbd>R</kbd>四角 <kbd>C</kbd>円<br>
+      右クリック/<kbd>Alt</kbd>+クリックでスポイト
+    </p>
+  </section>
+</main>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---- 状態 ----
+  const PALETTE = [
+    null, '#000000', '#222034', '#45283c', '#663931', '#8f563b', '#df7126', '#d9a066',
+    '#eec39a', '#fbf236', '#99e550', '#6abe30', '#37946e', '#4b692f', '#524b24', '#323c39',
+    '#3f3f74', '#306082', '#5b6ee1', '#639bff', '#5fcde4', '#cbdbfc', '#ffffff', '#9badb7',
+    '#847e87', '#696a6a', '#595652', '#76428a', '#ac3232', '#d95763', '#d77bba', '#8f974a',
+  ];
+  const STORAGE_KEY = 'pixel-icon-maker-v1';
+
+  let size = 16;
+  let pixels = new Array(size * size).fill(null); // '#rrggbb' または null(透明)
+  let tool = 'pen';
+  let color = '#222034';
+  let undoStack = [];
+  let redoStack = [];
+
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const statusEl = document.getElementById('status');
+  const colorInput = document.getElementById('color');
+  const colorHex = document.getElementById('colorHex');
+  const paletteEl = document.getElementById('palette');
+  const sizeSel = document.getElementById('size');
+  const showGrid = document.getElementById('showGrid');
+  const mirrorX = document.getElementById('mirrorX');
+  const mirrorY = document.getElementById('mirrorY');
+  const previews = [['pv1', 1], ['pv2', 2], ['pv4', 4]].map(([id, s]) => [document.getElementById(id), s]);
+
+  // ---- 保存/復元 ----
+  function save() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ size, pixels, color }));
+    } catch (e) { /* 保存できない環境では無視 */ }
+  }
+  function load() {
+    try {
+      const data = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      if (data && Array.isArray(data.pixels) && data.pixels.length === data.size * data.size) {
+        size = data.size;
+        pixels = data.pixels;
+        if (data.color) color = data.color;
+      }
+    } catch (e) { /* 破損データ等は無視 */ }
+  }
+
+  // ---- 履歴 ----
+  function pushHistory() {
+    undoStack.push({ size, pixels: pixels.slice() });
+    if (undoStack.length > 200) undoStack.shift();
+    redoStack = [];
+    updateHistoryButtons();
+  }
+  function restore(from, to) {
+    if (!from.length) return;
+    to.push({ size, pixels: pixels.slice() });
+    const s = from.pop();
+    size = s.size;
+    pixels = s.pixels;
+    sizeSel.value = String(size);
+    resizeCanvas();
+    render();
+    updateHistoryButtons();
+    save();
+  }
+  function updateHistoryButtons() {
+    document.getElementById('undo').disabled = !undoStack.length;
+    document.getElementById('redo').disabled = !redoStack.length;
+  }
+
+  // ---- 描画 ----
+  let cell = 1;
+  function resizeCanvas() {
+    // 1セルあたりの実ピクセル数。グリッド線を綺麗に描くため整数にする
+    cell = Math.max(4, Math.floor(1024 / size));
+    canvas.width = canvas.height = cell * size;
+    for (const [pv, s] of previews) {
+      pv.width = pv.height = size;
+      pv.style.width = pv.style.height = size * s + 'px';
+    }
+  }
+
+  function render(overlay) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const draw = overlay ? merged(overlay) : pixels;
+    for (let i = 0; i < draw.length; i++) {
+      const c = draw[i];
+      if (!c) continue;
+      ctx.fillStyle = c;
+      ctx.fillRect((i % size) * cell, Math.floor(i / size) * cell, cell, cell);
+    }
+    if (showGrid.checked) {
+      ctx.strokeStyle = 'rgba(128,128,140,0.35)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i = 1; i < size; i++) {
+        const p = i * cell + 0.5;
+        ctx.moveTo(p, 0); ctx.lineTo(p, canvas.height);
+        ctx.moveTo(0, p); ctx.lineTo(canvas.width, p);
+      }
+      ctx.stroke();
+      if (size >= 16) {
+        // 8マスごとに少し濃い線
+        ctx.strokeStyle = 'rgba(128,128,140,0.7)';
+        ctx.beginPath();
+        for (let i = 8; i < size; i += 8) {
+          const p = i * cell + 0.5;
+          ctx.moveTo(p, 0); ctx.lineTo(p, canvas.height);
+          ctx.moveTo(0, p); ctx.lineTo(canvas.width, p);
+        }
+        ctx.stroke();
+      }
+    }
+    renderPreviews(draw);
+  }
+
+  function renderPreviews(draw) {
+    const img = toImageData(draw);
+    for (const [pv] of previews) pv.getContext('2d').putImageData(img, 0, 0);
+  }
+
+  function toImageData(draw) {
+    const img = new ImageData(size, size);
+    for (let i = 0; i < draw.length; i++) {
+      const c = draw[i];
+      if (!c) continue;
+      const n = parseInt(c.slice(1), 16);
+      img.data[i * 4] = n >> 16;
+      img.data[i * 4 + 1] = (n >> 8) & 255;
+      img.data[i * 4 + 2] = n & 255;
+      img.data[i * 4 + 3] = 255;
+    }
+    return img;
+  }
+
+  // 図形ツールのプレビュー用: Map(index -> color) を重ねる
+  function merged(overlay) {
+    const out = pixels.slice();
+    for (const [i, c] of overlay) out[i] = c;
+    return out;
+  }
+
+  // ---- ピクセル操作 ----
+  function mirrored(x, y) {
+    const pts = [[x, y]];
+    if (mirrorX.checked) pts.push([size - 1 - x, y]);
+    if (mirrorY.checked) pts.push([x, size - 1 - y]);
+    if (mirrorX.checked && mirrorY.checked) pts.push([size - 1 - x, size - 1 - y]);
+    return pts;
+  }
+  function plot(target, x, y, c) {
+    for (const [px, py] of mirrored(x, y)) {
+      if (px < 0 || py < 0 || px >= size || py >= size) continue;
+      if (target instanceof Map) target.set(py * size + px, c);
+      else target[py * size + px] = c;
+    }
+  }
+
+  function linePoints(x0, y0, x1, y1) {
+    const pts = [];
+    const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+    let err = dx + dy;
+    for (;;) {
+      pts.push([x0, y0]);
+      if (x0 === x1 && y0 === y1) break;
+      const e2 = 2 * err;
+      if (e2 >= dy) { err += dy; x0 += sx; }
+      if (e2 <= dx) { err += dx; y0 += sy; }
+    }
+    return pts;
+  }
+
+  function rectPoints(x0, y0, x1, y1, filled) {
+    const pts = [];
+    const [ax, bx] = [Math.min(x0, x1), Math.max(x0, x1)];
+    const [ay, by] = [Math.min(y0, y1), Math.max(y0, y1)];
+    for (let y = ay; y <= by; y++) {
+      for (let x = ax; x <= bx; x++) {
+        if (filled || x === ax || x === bx || y === ay || y === by) pts.push([x, y]);
+      }
+    }
+    return pts;
+  }
+
+  // ドラッグした矩形に内接する楕円
+  function ellipsePoints(x0, y0, x1, y1) {
+    const [ax, bx] = [Math.min(x0, x1), Math.max(x0, x1)];
+    const [ay, by] = [Math.min(y0, y1), Math.max(y0, y1)];
+    const cx = (ax + bx) / 2, cy = (ay + by) / 2;
+    const rx = (bx - ax) / 2 + 0.5, ry = (by - ay) / 2 + 0.5;
+    const inside = (x, y) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1;
+    const pts = [];
+    for (let y = ay; y <= by; y++) {
+      for (let x = ax; x <= bx; x++) {
+        // 内側かつ4近傍のどれかが外側 = 輪郭
+        if (inside(x, y) && (!inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1))) {
+          pts.push([x, y]);
+        }
+      }
+    }
+    return pts;
+  }
+
+  function floodFill(x, y, c) {
+    const target = pixels[y * size + x];
+    if (target === c) return;
+    const stack = [[x, y]];
+    while (stack.length) {
+      const [px, py] = stack.pop();
+      if (px < 0 || py < 0 || px >= size || py >= size) continue;
+      const i = py * size + px;
+      if (pixels[i] !== target) continue;
+      pixels[i] = c;
+      stack.push([px + 1, py], [px - 1, py], [px, py + 1], [px, py - 1]);
+    }
+  }
+
+  // ---- 入力 ----
+  let drag = null; // { start:[x,y], last:[x,y], c, tool }
+
+  function cellAt(e) {
+    const r = canvas.getBoundingClientRect();
+    return [
+      Math.floor((e.clientX - r.left) / r.width * size),
+      Math.floor((e.clientY - r.top) / r.height * size),
+    ];
+  }
+  const inBounds = ([x, y]) => x >= 0 && y >= 0 && x < size && y < size;
+
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+  canvas.addEventListener('pointerdown', e => {
+    const p = cellAt(e);
+    if (!inBounds(p)) return;
+    canvas.setPointerCapture(e.pointerId);
+    const [x, y] = p;
+    let t = tool;
+    if (e.button === 2 || e.altKey) t = 'picker';
+
+    if (t === 'picker') {
+      const c = pixels[y * size + x];
+      if (c) setColor(c); else setTool('eraser');
+      return;
+    }
+    pushHistory();
+    const c = t === 'eraser' ? null : color;
+    if (t === 'fill') {
+      floodFill(x, y, c);
+      render(); save();
+      return;
+    }
+    drag = { start: p, last: p, c, tool: t };
+    if (t === 'pen' || t === 'eraser') {
+      plot(pixels, x, y, c);
+      render();
+    } else {
+      updateShape(p);
+    }
+  });
+
+  canvas.addEventListener('pointermove', e => {
+    const p = cellAt(e);
+    statusEl.textContent = inBounds(p) ? `x: ${p[0]}  y: ${p[1]}  /  ${size}×${size}` : `${size}×${size}`;
+    if (!drag) return;
+    if (drag.tool === 'pen' || drag.tool === 'eraser') {
+      // 速く動かしても途切れないように前回位置から線で結ぶ
+      for (const [x, y] of linePoints(drag.last[0], drag.last[1], p[0], p[1])) plot(pixels, x, y, drag.c);
+      drag.last = p;
+      render();
+    } else {
+      updateShape(p);
+    }
+  });
+
+  function shapePoints(t, [x0, y0], [x1, y1]) {
+    if (t === 'line') return linePoints(x0, y0, x1, y1);
+    if (t === 'rect') return rectPoints(x0, y0, x1, y1, false);
+    if (t === 'rectfill') return rectPoints(x0, y0, x1, y1, true);
+    if (t === 'circle') return ellipsePoints(x0, y0, x1, y1);
+    return [];
+  }
+  function updateShape(p) {
+    drag.last = p;
+    const overlay = new Map();
+    for (const [x, y] of shapePoints(drag.tool, drag.start, p)) plot(overlay, x, y, drag.c);
+    drag.overlay = overlay;
+    render(overlay);
+  }
+
+  function endDrag() {
+    if (!drag) return;
+    if (drag.overlay) for (const [i, c] of drag.overlay) pixels[i] = c;
+    drag = null;
+    render();
+    save();
+  }
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+  canvas.addEventListener('pointerleave', () => { if (!drag) statusEl.textContent = `${size}×${size}`; });
+
+  // ---- UI ----
+  function setTool(t) {
+    tool = t;
+    for (const b of document.querySelectorAll('#tools button')) b.classList.toggle('on', b.dataset.tool === t);
+  }
+  document.getElementById('tools').addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (b) setTool(b.dataset.tool);
+  });
+
+  function setColor(c) {
+    color = c;
+    colorInput.value = c;
+    colorHex.textContent = c;
+    for (const s of paletteEl.children) s.classList.toggle('sel', s.dataset.color === c);
+    if (tool === 'eraser' || tool === 'picker') setTool('pen');
+    save();
+  }
+  colorInput.addEventListener('input', () => setColor(colorInput.value));
+
+  PALETTE.forEach(c => {
+    const b = document.createElement('button');
+    b.className = 'swatch' + (c ? '' : ' transparent');
+    b.title = c || '透明 (消しゴム)';
+    if (c) { b.style.background = c; b.dataset.color = c; }
+    b.addEventListener('click', () => c ? setColor(c) : setTool('eraser'));
+    paletteEl.appendChild(b);
+  });
+
+  sizeSel.addEventListener('change', () => {
+    const n = Number(sizeSel.value);
+    if (n === size) return;
+    pushHistory();
+    const next = new Array(n * n).fill(null);
+    for (let y = 0; y < Math.min(n, size); y++)
+      for (let x = 0; x < Math.min(n, size); x++) next[y * n + x] = pixels[y * size + x];
+    size = n;
+    pixels = next;
+    resizeCanvas(); render(); save();
+  });
+
+  showGrid.addEventListener('change', () => render());
+
+  function transform(fn) {
+    pushHistory();
+    const next = new Array(size * size).fill(null);
+    for (let y = 0; y < size; y++)
+      for (let x = 0; x < size; x++) {
+        const [nx, ny] = fn(x, y);
+        if (nx >= 0 && ny >= 0 && nx < size && ny < size) next[ny * size + nx] = pixels[y * size + x];
+      }
+    pixels = next;
+    render(); save();
+  }
+  const N = () => size - 1;
+  document.getElementById('flipH').onclick = () => transform((x, y) => [N() - x, y]);
+  document.getElementById('flipV').onclick = () => transform((x, y) => [x, N() - y]);
+  document.getElementById('rotate').onclick = () => transform((x, y) => [N() - y, x]);
+  document.getElementById('shiftL').onclick = () => transform((x, y) => [(x - 1 + size) % size, y]);
+  document.getElementById('shiftR').onclick = () => transform((x, y) => [(x + 1) % size, y]);
+  document.getElementById('shiftU').onclick = () => transform((x, y) => [x, (y - 1 + size) % size]);
+  document.getElementById('shiftD').onclick = () => transform((x, y) => [x, (y + 1) % size]);
+  document.getElementById('clear').onclick = () => {
+    if (!pixels.some(Boolean)) return;
+    pushHistory();
+    pixels = new Array(size * size).fill(null);
+    render(); save();
+  };
+  document.getElementById('undo').onclick = () => restore(undoStack, redoStack);
+  document.getElementById('redo').onclick = () => restore(redoStack, undoStack);
+
+  // PNG書き出し
+  document.getElementById('download').onclick = () => {
+    const s = Number(document.getElementById('scale').value);
+    const out = document.createElement('canvas');
+    out.width = out.height = size * s;
+    const o = out.getContext('2d');
+    pixels.forEach((c, i) => {
+      if (!c) return;
+      o.fillStyle = c;
+      o.fillRect((i % size) * s, Math.floor(i / size) * s, s, s);
+    });
+    out.toBlob(blob => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `pixel-icon-${size}x${size}${s > 1 ? '@' + s + 'x' : ''}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    }, 'image/png');
+  };
+
+  // 画像読み込み → 縮小してドット化
+  const importFile = document.getElementById('importFile');
+  document.getElementById('importBtn').onclick = () => importFile.click();
+  importFile.addEventListener('change', () => {
+    const f = importFile.files[0];
+    if (!f) return;
+    const img = new Image();
+    img.onload = () => {
+      const tmp = document.createElement('canvas');
+      tmp.width = tmp.height = size;
+      const t = tmp.getContext('2d');
+      // 正方形に中央トリミング
+      const side = Math.min(img.width, img.height);
+      t.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, size, size);
+      const d = t.getImageData(0, 0, size, size).data;
+      pushHistory();
+      pixels = pixels.map((_, i) => d[i * 4 + 3] < 128 ? null :
+        '#' + [0, 1, 2].map(k => d[i * 4 + k].toString(16).padStart(2, '0')).join(''));
+      render(); save();
+      URL.revokeObjectURL(img.src);
+      importFile.value = '';
+    };
+    img.src = URL.createObjectURL(f);
+  });
+
+  // キーボード
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' && e.target.type !== 'checkbox') return;
+    const k = e.key.toLowerCase();
+    if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); e.shiftKey ? restore(redoStack, undoStack) : restore(undoStack, redoStack); return; }
+    if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); restore(redoStack, undoStack); return; }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const map = { b: 'pen', e: 'eraser', g: 'fill', i: 'picker', l: 'line', c: 'circle' };
+    if (k === 'r') setTool(e.shiftKey ? 'rectfill' : 'rect');
+    else if (map[k]) setTool(map[k]);
+  });
+
+  // ---- 起動 ----
+  load();
+  sizeSel.value = String(size);
+  resizeCanvas();
+  setColor(color);
+  setTool('pen');
+  updateHistoryButtons();
+  render();
+  statusEl.textContent = `${size}×${size}`;
+})();
+</script>
+</body>
+</html>
