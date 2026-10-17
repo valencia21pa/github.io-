@@ -208,10 +208,27 @@
     line-height: 1.7;
   }
   .drop.over { border-color: var(--accent); color: var(--accent); }
-  .cmp { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .cmp { display: flex; flex-direction: column; gap: 12px; align-items: center; }
+  .src-wrap {
+    position: relative;
+    display: inline-block;
+    line-height: 0;
+    overflow: hidden;
+    border-radius: 4px;
+    touch-action: none;
+    cursor: crosshair;
+    user-select: none;
+  }
+  .sel-box {
+    position: absolute;
+    border: 2px solid var(--accent);
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, .5);
+    cursor: move;
+  }
+  .sel-tools { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; align-items: center; }
   figure { margin: 0; display: flex; flex-direction: column; gap: 4px; align-items: center; }
   figcaption { font-size: 12px; color: var(--muted); }
-  #srcImg { max-width: 160px; max-height: 160px; border-radius: 4px; }
+  #srcImg { display: block; max-width: 100%; max-height: 260px; -webkit-user-drag: none; }
   .opts { display: grid; grid-template-columns: 6.5em minmax(0, 1fr); gap: 10px 8px; align-items: center; }
   .opts > span { color: var(--muted); font-size: 13px; }
   .opts input[type=range] { width: 100%; }
@@ -393,10 +410,18 @@
     <div class="dlg-body">
       <div>
         <div class="drop" id="dropZone">
-          ここに画像をドロップ<br>またはクリックして選ぶ<br><small>コピーした画像の貼り付け（Ctrl+V）もOK</small>
+          <button type="button" class="primary" id="uploadBtn">📁 画像をアップロード</button><br>
+          またはここに画像をドロップ<br><small>コピーした画像の貼り付け（Ctrl+V）もOK</small>
         </div>
         <div class="cmp" id="cmp" hidden>
-          <figure><img id="srcImg" alt="元画像"><figcaption>元画像</figcaption></figure>
+          <figure>
+            <div class="src-wrap" id="srcWrap"><img id="srcImg" alt="元画像" draggable="false"><div class="sel-box" id="selBox"></div></div>
+            <figcaption>ドラッグで使う範囲を選べます（枠の中をドラッグで移動）</figcaption>
+          </figure>
+          <div class="sel-tools">
+            <button type="button" id="selAll">全体を選ぶ</button>
+            <label class="chk"><input type="checkbox" id="selLock"> 出力サイズの比率で選ぶ</label>
+          </div>
           <figure><canvas id="dstCanvas" class="checker"></canvas><figcaption id="dstInfo"></figcaption></figure>
         </div>
         <input type="file" id="importFile" accept="image/*" hidden>
@@ -406,7 +431,7 @@
         <div class="row">
           <input type="number" id="cvW" min="1" max="128"> ×
           <input type="number" id="cvH" min="1" max="128">
-          <button type="button" id="cvRatio" title="幅に合わせて、高さを元画像の縦横比にする">比率を合わせる</button>
+          <button type="button" id="cvRatio" title="幅に合わせて、高さを選んだ範囲の縦横比にする">比率を合わせる</button>
         </div>
         <span>切り抜き</span>
         <select id="cvCrop">
@@ -1295,6 +1320,8 @@
     const url = URL.createObjectURL(file);
     srcImg.onload = () => {
       srcReady = true;
+      sel = { x: 0, y: 0, w: srcImg.naturalWidth, h: srcImg.naturalHeight };
+      drawSel();
       $('dropZone').hidden = true;
       $('cmp').hidden = false;
       $('cvOther').hidden = false;
@@ -1307,6 +1334,102 @@
 
   const dropZone = $('dropZone');
   dropZone.onclick = () => importFile.click();
+
+  // ---- 元画像の範囲選択（座標は元画像のピクセル単位） ----
+  const srcWrap = $('srcWrap');
+  const selBox = $('selBox');
+  let sel = null;
+  let selDrag = null;
+
+  function drawSel() {
+    const iw = srcImg.naturalWidth, ih = srcImg.naturalHeight;
+    selBox.style.left = sel.x / iw * 100 + '%';
+    selBox.style.top = sel.y / ih * 100 + '%';
+    selBox.style.width = sel.w / iw * 100 + '%';
+    selBox.style.height = sel.h / ih * 100 + '%';
+  }
+  function imgPoint(e) {
+    const r = srcImg.getBoundingClientRect();
+    return [
+      Math.max(0, Math.min(srcImg.naturalWidth, (e.clientX - r.left) / r.width * srcImg.naturalWidth)),
+      Math.max(0, Math.min(srcImg.naturalHeight, (e.clientY - r.top) / r.height * srcImg.naturalHeight)),
+    ];
+  }
+  // 出力サイズの縦横比（元画像のピクセル単位での 高さ/幅）
+  const lockRatio = () => {
+    const o = convertOptions();
+    return o.h / o.w;
+  };
+  function selectFromDrag([x0, y0], [x1, y1]) {
+    const iw = srcImg.naturalWidth, ih = srcImg.naturalHeight;
+    let w = Math.abs(x1 - x0), h = Math.abs(y1 - y0);
+    if ($('selLock').checked) {
+      const r = lockRatio();
+      if (w * r > h) h = w * r; else w = h / r;
+      // 画像の外にはみ出す分は縮める
+      const maxW = x1 >= x0 ? iw - x0 : x0, maxH = y1 >= y0 ? ih - y0 : y0;
+      const f = Math.min(1, maxW / w, maxH / h);
+      w *= f; h *= f;
+    }
+    sel = {
+      x: x1 >= x0 ? x0 : x0 - w,
+      y: y1 >= y0 ? y0 : y0 - h,
+      w, h,
+    };
+  }
+  srcWrap.addEventListener('pointerdown', e => {
+    if (!srcReady) return;
+    e.preventDefault();
+    srcWrap.setPointerCapture(e.pointerId);
+    const p = imgPoint(e);
+    const whole = sel.w >= srcImg.naturalWidth && sel.h >= srcImg.naturalHeight;
+    if (e.target === selBox && !whole) selDrag = { mode: 'move', start: p, orig: { ...sel } };
+    else selDrag = { mode: 'new', start: p, moved: false };
+  });
+  srcWrap.addEventListener('pointermove', e => {
+    if (!selDrag) return;
+    const p = imgPoint(e);
+    if (selDrag.mode === 'move') {
+      const o = selDrag.orig;
+      sel = {
+        ...o,
+        x: Math.max(0, Math.min(srcImg.naturalWidth - o.w, o.x + p[0] - selDrag.start[0])),
+        y: Math.max(0, Math.min(srcImg.naturalHeight - o.h, o.y + p[1] - selDrag.start[1])),
+      };
+    } else {
+      selDrag.moved = true;
+      selectFromDrag(selDrag.start, p);
+    }
+    drawSel();
+    updateConvert();
+  });
+  const endSelDrag = () => {
+    if (!selDrag) return;
+    // 小さすぎる範囲（ただのクリック）は全体に戻す
+    const min = Math.max(2, Math.min(srcImg.naturalWidth, srcImg.naturalHeight) * 0.02);
+    if (selDrag.mode === 'new' && (sel.w < min || sel.h < min)) resetSel();
+    selDrag = null;
+    updateConvert();
+  };
+  srcWrap.addEventListener('pointerup', endSelDrag);
+  srcWrap.addEventListener('pointercancel', endSelDrag);
+  function resetSel() {
+    sel = { x: 0, y: 0, w: srcImg.naturalWidth, h: srcImg.naturalHeight };
+    drawSel();
+  }
+  $('selAll').onclick = () => { if (srcReady) { resetSel(); updateConvert(); } };
+  $('selLock').addEventListener('change', () => {
+    if (!srcReady || !$('selLock').checked) return;
+    // 今の範囲の中心を保ったまま比率を合わせる
+    const cx = sel.x + sel.w / 2, cy = sel.y + sel.h / 2;
+    const iw = srcImg.naturalWidth, ih = srcImg.naturalHeight, r = lockRatio();
+    let w = sel.w, h = w * r;
+    if (h > sel.h) { h = sel.h; w = h / r; }
+    w = Math.min(w, iw); h = Math.min(h, ih);
+    sel = { x: Math.max(0, Math.min(iw - w, cx - w / 2)), y: Math.max(0, Math.min(ih - h, cy - h / 2)), w, h };
+    drawSel();
+    updateConvert();
+  });
   $('cvOther').onclick = () => importFile.click();
   importFile.addEventListener('change', () => { loadFile(importFile.files[0]); importFile.value = ''; });
   dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over'); });
@@ -1339,19 +1462,22 @@
       bgTol: Number($('cvBgTol').value),
       outline: $('cvOutline').checked,
       outlineColor: $('cvOutlineColor').value,
+      region: sel,
     };
   }
 
   function convertImage(img, o) {
     const { w, h } = o;
     const n = w * h;
-    const iw = img.naturalWidth, ih = img.naturalHeight;
+    // 選んだ範囲（なければ画像全体）
+    const reg = o.region || { x: 0, y: 0, w: img.naturalWidth, h: img.naturalHeight };
+    const iw = Math.max(1, reg.w), ih = Math.max(1, reg.h);
 
     // 元画像のどこを、出力のどこに描くか
-    let sx = 0, sy = 0, sw = iw, sh = ih, dx = 0, dy = 0, dw = w, dh = h;
+    let sx = reg.x, sy = reg.y, sw = iw, sh = ih, dx = 0, dy = 0, dw = w, dh = h;
     if (o.crop === 'fill') {
       const r = Math.max(w / iw, h / ih);
-      sw = w / r; sh = h / r; sx = (iw - sw) / 2; sy = (ih - sh) / 2;
+      sw = w / r; sh = h / r; sx = reg.x + (iw - sw) / 2; sy = reg.y + (ih - sh) / 2;
     } else if (o.crop === 'fit') {
       const r = Math.min(w / iw, h / ih);
       dw = Math.max(1, Math.round(iw * r)); dh = Math.max(1, Math.round(ih * r));
@@ -1498,10 +1624,13 @@
   for (const id of ['cvW', 'cvH', 'cvCrop', 'cvPalette', 'cvColors', 'cvContrast', 'cvSat', 'cvDither', 'cvBg', 'cvBgTol', 'cvOutline', 'cvOutlineColor']) {
     $(id).addEventListener('input', updateConvert);
   }
+  for (const id of ['cvW', 'cvH']) {
+    $(id).addEventListener('change', () => { if ($('selLock').checked) $('selLock').dispatchEvent(new Event('change')); });
+  }
   $('cvRatio').onclick = () => {
     if (!srcReady) return;
     const w = Number($('cvW').value) || W;
-    $('cvH').value = Math.max(1, Math.min(128, Math.round(w * srcImg.naturalHeight / srcImg.naturalWidth)));
+    $('cvH').value = Math.max(1, Math.min(128, Math.round(w * sel.h / sel.w)));
     updateConvert();
   };
 
