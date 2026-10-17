@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ドット絵メーカー</title>
+<meta name="claude:viewport-fit-sides" content="cover">
 <style>
   :root {
     --bg: #f4f4f6;
@@ -15,9 +16,10 @@
     --accent-text: #ffffff;
     --checker-a: #ffffff;
     --checker-b: #e6e6ea;
+    color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
       --bg: #17171b;
       --panel: #222228;
       --text: #ececf0;
@@ -27,7 +29,20 @@
       --accent-text: #0e0e12;
       --checker-a: #3a3a42;
       --checker-b: #2e2e35;
+      color-scheme: dark;
     }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17171b;
+    --panel: #222228;
+    --text: #ececf0;
+    --muted: #9a9aa6;
+    --line: #383840;
+    --accent: #7189ff;
+    --accent-text: #0e0e12;
+    --checker-a: #3a3a42;
+    --checker-b: #2e2e35;
+    color-scheme: dark;
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
@@ -38,8 +53,12 @@
     font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
     font-size: 14px;
   }
+  header, main {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
   header {
-    padding: 16px;
+    padding-block: 16px;
     max-width: 1140px;
     margin: 0 auto;
   }
@@ -48,7 +67,7 @@
   main {
     max-width: 1140px;
     margin: 0 auto;
-    padding: 0 16px 32px;
+    padding-block: 0 32px;
     display: grid;
     grid-template-columns: 220px minmax(0, 1fr) 240px;
     gap: 16px;
@@ -616,8 +635,14 @@
       if (o && Array.isArray(o.pixels) && o.pixels.length === o.size * o.size) {
         W = H = o.size; frames = [o.pixels];
         if (o.color) color = o.color;
+        return;
       }
     } catch (e) { /* 破損データ等は無視 */ }
+    // 初回はサンプルとして勇者テンプレートを表示
+    const t = TEMPLATES.hero;
+    H = t.frames[0].length;
+    W = t.frames[0][0].length;
+    frames = t.frames.map(rows => rows.join('').split('').map(ch => t.colors[ch] || null));
   }
 
   // ---- 履歴 ----
@@ -1122,7 +1147,13 @@
   });
 
   // ---- 書き出し ----
-  function downloadBlob(blob, name) {
+  async function downloadBlob(blob, name) {
+    // Claude のアーティファクト内では downloads 機能で保存する
+    const dl = window.claude && window.claude.use ? await window.claude.use('downloads').catch(() => null) : null;
+    if (dl) {
+      try { await dl.save({ filename: name, data: blob }); } catch (e) { console.warn('保存できませんでした', e); }
+      return;
+    }
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = name;
