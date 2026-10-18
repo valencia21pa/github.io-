@@ -65,6 +65,27 @@ async function cloudFlush() {
   cloudBusy = false;
   if (cloudDirty) cloudQueue();
 }
+// 2つの保存内容を結合する。newer の値を優先し、ログ（id）・練習項目（title）・メモは older にしか無い分も残す
+function mergeStates(older, newer) {
+  const out = Object.assign({}, older, newer);
+  const byKey = (a, b, key) => { const m = new Map(); for (const x of a || []) m.set(key(x), x); for (const x of b || []) m.set(key(x), x); return [...m.values()]; };
+  out.log = byKey(older.log, newer.log, g => g.id).sort((x, y) => (x.date || "").localeCompare(y.date || ""));
+  out.globalDrills = byKey(older.globalDrills, newer.globalDrills, d => d.title);
+  out.globalChecks = Object.assign({}, older.globalChecks, newer.globalChecks);
+  out.custom = byKey(older.custom, newer.custom, c => c.id);
+  out.puddle = (newer.puddle || []).length ? newer.puddle : (older.puddle || []);
+  out.puddleMeta = (newer.puddle || []).length ? newer.puddleMeta : (older.puddleMeta || {});
+  out.pairs = Object.assign({}, older.pairs);
+  for (const [k, p] of Object.entries(newer.pairs || {})) {
+    const o = out.pairs[k] || {};
+    out.pairs[k] = Object.assign({}, o, p, {
+      notes: Object.assign({}, o.notes, p.notes),
+      drills: Object.assign({}, o.drills, p.drills),
+      customDrills: byKey(o.customDrills, p.customDrills, d => d.title),
+    });
+  }
+  return out;
+}
 async function cloudInit() {
   if (!window.claude?.use) { setCloud("off", "クラウド保存：この表示では使えません（ブラウザ内のみ）"); return; }
   const db = await claude.use("db");
@@ -73,21 +94,20 @@ async function cloudInit() {
     cloudDoc = db.doc("user/state");
     const snap = await cloudDoc.get();
     const remote = snap.exists ? snap.data() : null;
-    const localHas = state.log.length || Object.keys(state.pairs).length || (state.puddle || []).length;
-    if (remote && (remote.updatedAt || 0) > (state.updatedAt || 0)) {
-      // クラウドの方が新しい → 採用。ただしローカルにしかないログは失わないよう結合
-      const localLogIds = new Set((remote.log || []).map(g => g.id));
-      const extra = state.log.filter(g => !localLogIds.has(g.id));
-      Object.assign(state, pickSync(remote));
-      if (extra.length) { state.log = state.log.concat(extra).sort((x, y) => x.date.localeCompare(y.date)); }
+    if (remote) {
+      // ローカルとクラウドを結合する（新しい方を優先しつつ、ログ・練習項目・メモは両方の分を残す）。
+      // 片方が空でも、もう片方のデータを消さない
+      const localNewer = (state.updatedAt || 0) > (remote.updatedAt || 0);
+      const before = JSON.stringify(pickSync(remote));
+      const merged = localNewer ? mergeStates(pickSync(remote), pickSync(state)) : mergeStates(pickSync(state), pickSync(remote));
+      merged.updatedAt = Math.max(state.updatedAt || 0, remote.updatedAt || 0);
+      Object.assign(state, merged);
       try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (_) {}
       renderAll();
-      setCloud("ok", "クラウド保存：読み込み済み（" + state.log.length + " 件のログ）" + (extra.length ? "、ローカル分 " + extra.length + " 件を結合" : ""));
-      if (extra.length) cloudQueue();
-    } else if (localHas) {
+      setCloud("ok", "クラウド保存：読み込み済み（" + state.log.length + " 件のログ）");
+      if (JSON.stringify(pickSync(state)) !== before) { cloudDirty = true; await cloudFlush(); }
+    } else if (state.log.length || Object.keys(state.pairs).length || (state.puddle || []).length) {
       cloudDirty = true; await cloudFlush();
-    } else if (remote) {
-      Object.assign(state, pickSync(remote)); renderAll(); setCloud("ok", "クラウド保存：読み込み済み");
     } else {
       setCloud("ok", "クラウド保存：有効（まだデータなし）");
     }
@@ -827,7 +847,7 @@ $("resetBtn").addEventListener("click", e => {
 load();
 // 同梱の Puddle Farm 履歴を初回だけ取り込む（必ず load() の後。前に置くと保存内容を上書きしてしまう）
 if (!(state.puddle || []).length && typeof PUDDLE_SEED !== "undefined" && PUDDLE_SEED.length) {
-  try { importPuddle(JSON.stringify(PUDDLE_SEED)); save(); } catch (_) {}
+  try { importPuddle(JSON.stringify(PUDDLE_SEED)); state.updatedAt = 0; localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (_) {}
 }
 renderAll();
 cloudInit();
