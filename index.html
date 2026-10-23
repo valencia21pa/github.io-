@@ -4,29 +4,45 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>toto 予想ツール</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
+  /* 1画面の作業ツール：設定 → 試合ごとの要素 → 結果 の縦積み。芝のグリーンをアクセントに、1/0/2 を青・灰・朱で色分け */
   :root {
-    --bg: #f5f6f8; --card: #ffffff; --text: #1d2330; --muted: #6b7280;
-    --line: #e2e5ea; --accent: #0b7a3e; --accent-weak: #e3f3ea;
-    --home: #1f6fd1; --draw: #8a8f98; --away: #d1491f; --warn: #b45309;
+    --bg: #f3f5f2; --card: #ffffff; --text: #1b241d; --muted: #5f6b62;
+    --line: #dde3dc; --accent: #0b7a3e; --accent-weak: #e1f1e7;
+    --home: #1f6fd1; --draw: #858d88; --away: #cf4a1f; --warn: #a85a07;
+    --font: "Noto Sans JP", system-ui, -apple-system, "Hiragino Sans", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
   }
   @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #11141a; --card: #1a1f27; --text: #e7eaf0; --muted: #9aa3b2;
-      --line: #2c333e; --accent: #34c27a; --accent-weak: #1c3a2a;
-      --home: #5b9bf0; --draw: #a3a9b3; --away: #f07a55; --warn: #f0b35b;
+    :root:not([data-theme="light"]) {
+      --bg: #101511; --card: #182019; --text: #e6ece7; --muted: #9aa69d;
+      --line: #2a352c; --accent: #34c27a; --accent-weak: #1a3524;
+      --home: #5b9bf0; --draw: #a0a8a3; --away: #f07a55; --warn: #f0b35b;
+      color-scheme: dark;
     }
+  }
+  :root[data-theme="dark"] {
+    --bg: #101511; --card: #182019; --text: #e6ece7; --muted: #9aa69d;
+    --line: #2a352c; --accent: #34c27a; --accent-weak: #1a3524;
+    --home: #5b9bf0; --draw: #a0a8a3; --away: #f07a55; --warn: #f0b35b;
+    color-scheme: dark;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0; background: var(--bg); color: var(--text);
-    font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    font-family: var(--font);
     line-height: 1.5;
   }
-  header { padding: 20px 16px 8px; max-width: 960px; margin: 0 auto; }
+  header, main {
+    max-width: 960px; margin: 0 auto;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  header { padding-block: 20px 8px; }
   header h1 { margin: 0; font-size: 1.5rem; }
   header p { margin: 4px 0 0; color: var(--muted); font-size: .9rem; }
-  main { max-width: 960px; margin: 0 auto; padding: 8px 16px 40px; }
+  main { padding-block: 8px 40px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
   .card h2 { margin: 0 0 12px; font-size: 1.05rem; }
   .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
@@ -42,6 +58,8 @@
   }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
   button:hover { filter: brightness(1.05); }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button.danger { border-color: var(--warn); color: var(--warn); }
   details summary { cursor: pointer; color: var(--muted); font-size: .9rem; }
 
   table { width: 100%; border-collapse: collapse; }
@@ -67,10 +85,10 @@
   .stat { background: var(--bg); border-radius: 10px; padding: 10px 12px; }
   .stat .k { font-size: .8rem; color: var(--muted); }
   .stat .v { font-size: 1.35rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .ticket { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 1.1rem; letter-spacing: .1em;
+  .ticket { font-family: var(--mono); font-size: 1.1rem; letter-spacing: .1em;
     background: var(--accent-weak); padding: 10px 12px; border-radius: 8px; word-break: break-all; }
   .note { color: var(--muted); font-size: .8rem; }
-  .lines { max-height: 260px; overflow: auto; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .85rem;
+  .lines { max-height: 260px; overflow: auto; font-family: var(--mono); font-size: .85rem;
     background: var(--bg); border-radius: 8px; padding: 8px 12px; white-space: pre; }
 
   .fxbtn { margin-top: 6px; padding: 2px 8px; font-size: .8rem; }
@@ -207,7 +225,8 @@
   const STORE_KEY = "toto-yosou-v1";
   const $ = id => document.getElementById(id);
 
-  let state = load() || { game: 13, budget: 1600, unit: 100, matches: [] };
+  const saved = load();
+  let state = saved || { game: 13, budget: 1600, unit: 100, matches: [] };
 
   const STYLES = ["ポゼッション", "ハイプレス", "カウンター", "堅守ブロック", "ロングボール", "サイド攻撃"];
   // [有利, 不利]：左のスタイルが右のスタイルを得意とする組み合わせ
@@ -553,14 +572,28 @@
   $("btnModelAll").addEventListener("click", () => { state.matches.forEach(applyModel); save(); render(); });
   $("btnRandom").addEventListener("click", randomPick);
   $("btnPaste").addEventListener("click", applyPaste);
+  // confirm() が使えない環境もあるので、2回押しで確定
+  let resetArmed = null;
   $("btnReset").addEventListener("click", () => {
-    if (!confirm("入力内容をすべてリセットしますか？")) return;
+    const btn = $("btnReset");
+    if (!resetArmed) {
+      btn.textContent = "もう一度押すと全消去"; btn.classList.add("danger");
+      resetArmed = setTimeout(() => { resetArmed = null; btn.textContent = "リセット"; btn.classList.remove("danger"); }, 4000);
+      return;
+    }
+    clearTimeout(resetArmed); resetArmed = null;
+    btn.textContent = "リセット"; btn.classList.remove("danger");
     state = { game: state.game, budget: 1600, unit: 100, matches: [] };
     ensureMatches(); save(); render();
+    $("msg").textContent = "すべての入力を消去しました。";
   });
   $("btnCopy").addEventListener("click", async () => {
     try { await navigator.clipboard.writeText($("ticket").textContent); $("msg").textContent = "コピーしました。"; }
-    catch { $("msg").textContent = "コピーできませんでした。"; }
+    catch {
+      const r = document.createRange(); r.selectNodeContents($("ticket"));
+      const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      $("msg").textContent = "自動コピーできなかったので表記を選択しました。手動でコピーしてください。";
+    }
   });
   $("btnLines").addEventListener("click", () => {
     const w = $("linesWrap");
@@ -570,8 +603,38 @@
     if (show) showLines();
   });
 
+  // 初回はサンプルの対戦カードで動きを見せる（数値は架空）
+  function loadSample() {
+    const S = [
+      ["札幌", "鹿島", 66, 17, 72, 11, 0, 1050, 7, 0, "ロングボール", "ハイプレス", 3, 4, 2],
+      ["浦和", "名古屋", 74, 6, 71, 9, 0, 300, 4, 1, "ポゼッション", "堅守ブロック", 4, 3, 3],
+      ["柏", "FC東京", 68, 13, 70, 10, 0, 40, 7, 0, "サイド攻撃", "カウンター", 3, 2, 3],
+      ["川崎F", "横浜FM", 77, 4, 75, 5, 0, 30, 3, 2, "ポゼッション", "ハイプレス", 5, 4, 1],
+      ["湘南", "G大阪", 64, 18, 72, 7, 0, 480, 7, 1, "ハイプレス", "ポゼッション", 3, 4, 2],
+      ["新潟", "C大阪", 66, 15, 70, 12, 0, 500, 7, 0, "ポゼッション", "カウンター", 3, 3, 1],
+      ["磐田", "広島", 63, 19, 78, 2, 0, 650, 6, 1, "堅守ブロック", "ハイプレス", 2, 5, 0],
+      ["京都", "神戸", 67, 14, 79, 1, 0, 80, 3, 2, "ハイプレス", "ロングボール", 3, 4, 1],
+      ["福岡", "町田", 69, 11, 75, 3, 0, 1000, 7, 0, "堅守ブロック", "ロングボール", 3, 4, 2],
+      ["鳥栖", "東京V", 62, 20, 69, 8, 0, 1000, 4, 0, "ポゼッション", "ハイプレス", 2, 3, 3],
+      ["清水", "岡山", 68, 16, 66, 14, 0, 520, 7, 0, "サイド攻撃", "堅守ブロック", 3, 3, 0],
+      ["長崎", "仙台", 70, 1, 65, 6, 0, 1300, 7, 1, "サイド攻撃", "カウンター", 4, 3, 1],
+      ["甲府", "大分", 64, 9, 63, 11, 0, 800, 7, 0, "カウンター", "ポゼッション", 3, 2, 2],
+    ];
+    state.matches = S.map(([home, away, hr, hk, ar, ak, hd, ad, rest, load, hs, as, hc, ac, h2]) => {
+      const m = blankMatch();
+      m.home = home; m.away = away;
+      Object.assign(m.f.h, { rating: hr, rank: hk, dist: hd, style: hs, coach: hc });
+      Object.assign(m.f.a, { rating: ar, rank: ak, dist: ad, rest, load, style: as, coach: ac });
+      m.f.h2h = { hw: h2, d: 2, aw: Math.max(0, 3 - h2) };
+      return m;
+    });
+    state.matches.forEach(applyModel);
+    optimize();
+    $("msg").textContent = "サンプルの対戦カードを表示しています（チーム名以外の数値は架空）。「リセット」で空にできます。";
+  }
+
   ensureMatches();
-  render();
+  if (!saved) loadSample(); else render();
 })();
 </script>
 </body>
