@@ -115,7 +115,7 @@
 <body>
 <header>
   <h1>⚽ toto 予想ツール</h1>
-  <p>選手の基本能力・移動距離・前の試合の負担・戦術の相性から各試合の勝敗確率を計算し、予算内で的中確率が最大になるようにダブル・トリプルを割り当てます。</p>
+  <p>選手の基本能力・順位・監督とコーチ・移動距離・前の試合の負担・戦術の相性・過去の対戦成績から各試合の勝敗確率を計算し、予算内で的中確率が最大になるようにダブル・トリプルを割り当てます。</p>
 </header>
 <main>
   <section class="card">
@@ -148,12 +148,15 @@
 
   <section class="card">
     <h2>2. 試合と確率</h2>
-    <p class="note">「⚙ 要素」を開いて、選手の基本能力・移動距離・中日数と前の試合の負担・戦術スタイルを入力すると、確率（%）が自動で計算されます。% を直接入力することもできます（合計が100でなくても自動で正規化します）。予想ボタン（1=ホーム勝ち / 0=引き分け / 2=アウェイ勝ち）は手動でも切り替えられます。</p>
+    <p class="note">「⚙ 要素」を開いて、選手の基本能力・順位・監督とコーチの評価・移動距離・中日数と前の試合の負担・戦術スタイル・過去の対戦成績を入力すると、確率（%）が自動で計算されます。% を直接入力することもできます（合計が100でなくても自動で正規化します）。予想ボタン（1=ホーム勝ち / 0=引き分け / 2=アウェイ勝ち）は手動でも切り替えられます。</p>
     <details>
       <summary>計算モデルについて</summary>
       <ul class="note">
         <li>各チームの期待得点を基準 1.25 点として、以下の要素で増減させ、ポアソン分布からスコアごとの確率を出して 1/0/2 を集計します（引き分けは実際の傾向に合わせて少し上乗せ）。</li>
         <li><b>基本能力</b>：0〜100（先発メンバーの平均的な実力の目安）。10ポイント差で、強いチームの期待得点が約1.16倍、弱いチームが約0.86倍になります。主力の欠場はここを下げて反映してください。</li>
+        <li><b>順位</b>：順位差1つにつき少しずつ上位チームに有利（10位差で期待得点比が約1.16倍）。能力と重なる部分があるので効果は控えめです。</li>
+        <li><b>監督・コーチ</b>：1〜5の評価。1段階差で期待得点比が約1.05倍。</li>
+        <li><b>過去の対戦成績</b>：勝ち越している側を有利にし、引き分けが多いカードは引き分け確率を上げます。対戦数が少ないうちは効果を弱めます。</li>
         <li><b>ホームアドバンテージ</b>：ホームの期待得点を約1.13倍にします。</li>
         <li><b>移動距離</b>：500kmごとに疲労が増えます（上限2,000km）。</li>
         <li><b>前の試合の負担</b>：中日数が短いほど、また前の試合の負担が重いほど疲労が増えます。疲労は自分の得点を減らし、相手の得点を増やします。</li>
@@ -219,6 +222,7 @@
     ["サイド攻撃", "堅守ブロック"],     // 中央を固める相手を外から崩す
     ["カウンター", "サイド攻撃"],       // 上がったサイドバックの裏を使う
   ];
+  const COACH = ["不安定・就任直後で浸透前", "やや物足りない", "標準", "優秀", "リーグ屈指（采配・分析・指導）"];
   const LOADS = ["低（軽め）", "中（主力フル出場）", "高（延長・過密）"];
   const ADJ = { "-2": "アウェイがかなり得意", "-1": "アウェイがやや得意", "0": "なし", "1": "ホームがやや得意", "2": "ホームがかなり得意" };
 
@@ -230,10 +234,10 @@
   }
 
   function blankTeam(dist) {
-    return { rating: 70, dist, rest: 7, load: 0, style: "" };
+    return { rating: 70, rank: 10, coach: 3, dist, rest: 7, load: 0, style: "" };
   }
   function blankFactors() {
-    return { h: blankTeam(0), a: blankTeam(300), adj: 0 };
+    return { h: blankTeam(0), a: blankTeam(300), adj: 0, h2h: { hw: 0, d: 0, aw: 0 } };
   }
   function blankMatch() {
     return { home: "", away: "", p: DEFAULT_P.slice(), pick: [true, false, false], f: blankFactors(), open: false };
@@ -241,7 +245,14 @@
   function ensureMatches() {
     while (state.matches.length < state.game) state.matches.push(blankMatch());
     state.matches.length = state.game;
-    state.matches.forEach(m => { if (!m.f) m.f = blankFactors(); });
+    // 古い保存データに新しい項目を補う
+    state.matches.forEach(m => {
+      const def = blankFactors();
+      m.f = Object.assign(def, m.f || {});
+      m.f.h = Object.assign(blankTeam(0), m.f.h);
+      m.f.a = Object.assign(blankTeam(300), m.f.a);
+      m.f.h2h = Object.assign({ hw: 0, d: 0, aw: 0 }, m.f.h2h);
+    });
   }
 
   // 疲労度（対数スケール）：移動距離 + 中日数 + 前の試合の負担
@@ -254,25 +265,33 @@
 
   // 要素から期待得点と 1/0/2 の確率を計算
   function model(f) {
-    const BASE = 1.25, HOME_ADV = 0.12, PER_RATING = 0.03, PER_TACTIC = 0.07, DRAW_BOOST = 1.1;
+    const BASE = 1.25, HOME_ADV = 0.12, PER_RATING = 0.03, PER_RANK = 0.015, PER_COACH = 0.05,
+      PER_TACTIC = 0.07, H2H = 0.4, DRAW_BOOST = 1.1;
     const fh = fatigue(f.h), fa = fatigue(f.a);
     const tactic = tacticEdge(f.h.style, f.a.style) + Number(f.adj || 0);
-    // ホーム視点の有利度（ホーム得点の log に +x、アウェイ得点の log に -x として作用）
+    // 過去の対戦成績：対戦数が少ないうちは効果を弱める（+4 試合分だけ互角に寄せる）
+    const { hw, d: hd, aw } = f.h2h, n = hw + hd + aw;
+    const h2h = H2H * (hw - aw) / (n + 4);
+    const drawBoost = DRAW_BOOST * (1 + 0.6 * (hd - 0.27 * n) / (n + 4));
+    // ホーム視点の有利度（log(ホーム期待得点 / アウェイ期待得点) への寄与）
     const parts = {
       能力: PER_RATING * (f.h.rating - f.a.rating),
+      順位: PER_RANK * (f.a.rank - f.h.rank),
+      監督: PER_COACH * (f.h.coach - f.a.coach),
       ホーム: HOME_ADV,
       移動: fa.travel - fh.travel,
       負担: fa.rest - fh.rest,
       戦術: PER_TACTIC * tactic,
+      対戦成績: h2h,
     };
-    const lh = BASE * Math.exp(PER_RATING * (f.h.rating - f.a.rating) / 2 + HOME_ADV + PER_TACTIC * tactic / 2
-      - 0.6 * (fh.travel + fh.rest) + 0.4 * (fa.travel + fa.rest));
-    const la = BASE * Math.exp(-PER_RATING * (f.h.rating - f.a.rating) / 2 - PER_TACTIC * tactic / 2
-      - 0.6 * (fa.travel + fa.rest) + 0.4 * (fh.travel + fh.rest));
+    // 疲労以外は両チームに半分ずつ（ホームアドバンテージはホームのみ）
+    const sym = parts.能力 + parts.順位 + parts.監督 + parts.戦術 + parts.対戦成績;
+    const lh = BASE * Math.exp(sym / 2 + HOME_ADV - 0.6 * (fh.travel + fh.rest) + 0.4 * (fa.travel + fa.rest));
+    const la = BASE * Math.exp(-sym / 2 - 0.6 * (fa.travel + fa.rest) + 0.4 * (fh.travel + fh.rest));
     const pois = (l, k) => { let v = Math.exp(-l); for (let i = 1; i <= k; i++) v *= l / i; return v; };
     let w = 0, d = 0, a = 0, best = { p: -1 };
     for (let i = 0; i <= 10; i++) for (let j = 0; j <= 10; j++) {
-      const v = pois(lh, i) * pois(la, j) * (i === j ? DRAW_BOOST : 1);
+      const v = pois(lh, i) * pois(la, j) * (i === j ? drawBoost : 1);
       if (i > j) w += v; else if (i === j) d += v; else a += v;
       if (v > best.p) best = { p: v, s: `${i}-${j}` };
     }
@@ -355,6 +374,9 @@
       const t = m.f[side];
       return `<fieldset class="fx-team"><legend>${esc(name)}</legend>
         <label>基本能力（0〜100）<input type="number" min="0" max="100" data-s="${side}" data-k="rating" value="${t.rating}"></label>
+        <label>順位<input type="number" min="1" max="40" data-s="${side}" data-k="rank" value="${t.rank}"></label>
+        <label>監督・コーチ<select data-s="${side}" data-k="coach">${COACH.map((c, k) =>
+          `<option value="${k + 1}"${t.coach === k + 1 ? " selected" : ""}>${k + 1}：${c}</option>`).join("")}</select></label>
         <label>移動距離（km）<input type="number" min="0" step="50" data-s="${side}" data-k="dist" value="${t.dist}"></label>
         <label>中日数<input type="number" min="1" max="30" data-s="${side}" data-k="rest" value="${t.rest}"></label>
         <label>前の試合の負担<select data-s="${side}" data-k="load">${LOADS.map((l, k) =>
@@ -373,6 +395,11 @@
         <label>戦術補正（選手の特徴や相手の弱点など）<select data-adj>${Object.keys(ADJ).sort((a, b) => b - a).map(k =>
           `<option value="${k}"${String(m.f.adj) === k ? " selected" : ""}>${Number(k) > 0 ? "+" : ""}${k}：${ADJ[k]}</option>`).join("")}</select></label>
         <span class="note">相性：${edgeText}</span>
+      </div>
+      <div class="fx-adj">
+        <span class="note" style="align-self:center">過去の対戦成績（直近）</span>
+        ${[["hw", `${m.home || "ホーム"}の勝ち`], ["d", "引き分け"], ["aw", `${m.away || "アウェイ"}の勝ち`]].map(([k, l]) =>
+          `<label>${esc(l)}<input type="number" min="0" max="50" data-h="${k}" value="${m.f.h2h[k]}" style="width:5em"></label>`).join("")}
         <button data-apply>この要素で確率を再計算</button>
       </div>
       <div class="fx-out">
@@ -383,6 +410,10 @@
           <span class="note">（＋はホーム有利、−はアウェイ有利）</span></div>
       </div>
     </td>`;
+    tr.querySelectorAll("[data-h]").forEach(el => el.addEventListener("change", () => {
+      m.f.h2h[el.dataset.h] = Math.max(0, Math.floor(Number(el.value) || 0));
+      applyModel(m); save(); render();
+    }));
     tr.querySelectorAll("[data-s]").forEach(el => el.addEventListener("change", () => {
       const t = m.f[el.dataset.s], k = el.dataset.k;
       t[k] = k === "style" ? el.value : Math.max(0, Number(el.value) || 0);
