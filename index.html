@@ -100,7 +100,15 @@
   .fx-team legend { font-weight: 600; padding: 0 4px; }
   .fx-team input, .fx-team select, .fx-adj select { width: 100%; background: var(--card); }
   .fx-adj { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-top: 10px; }
+  .fx-h { grid-column: 1 / -1; font-size: .72rem; letter-spacing: .08em; color: var(--accent); font-weight: 700;
+    border-top: 1px dashed var(--line); padding-top: 6px; margin-top: 2px; }
+  .fx-h:first-of-type { border-top: 0; padding-top: 0; margin-top: 0; }
+  label.chk { flex-direction: row; align-items: center; gap: 6px; align-self: end; padding-bottom: 6px; }
+  .fx-adj input[type=number] { width: 5em; background: var(--card); }
   .fx-out { margin-top: 10px; font-size: .85rem; }
+  .wgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-top: 12px; }
+  .wgrid input { width: 100%; }
+  .wgrid label.changed { color: var(--accent); }
   .fx-out b { font-variant-numeric: tabular-nums; }
   .contrib { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .contrib span { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; font-size: .78rem; }
@@ -151,6 +159,14 @@
       <label>1口の金額（円）
         <input type="number" id="unit" min="100" step="100" value="100">
       </label>
+      <label>リーグ平均得点（1チーム1試合）
+        <input type="number" id="leagueAvg" min="0.5" max="3" step="0.05" value="1.3">
+      </label>
+      <label>オッズの反映度（%）
+        <input type="number" id="oddsW" min="0" max="100" step="10" value="50">
+      </label>
+    </div>
+    <div class="row" style="margin-top:12px">
       <button id="btnModelAll">全試合を要素から計算</button>
       <button id="btnOptimize" class="primary">最適化して予想</button>
       <button id="btnRandom">確率ランダム（シングル）</button>
@@ -166,19 +182,17 @@
 
   <section class="card">
     <h2>2. 試合と確率</h2>
-    <p class="note">「⚙ 要素」を開いて、選手の基本能力・順位・監督とコーチの評価・移動距離・中日数と前の試合の負担・戦術スタイル・過去の対戦成績を入力すると、確率（%）が自動で計算されます。% を直接入力することもできます（合計が100でなくても自動で正規化します）。予想ボタン（1=ホーム勝ち / 0=引き分け / 2=アウェイ勝ち）は手動でも切り替えられます。</p>
+    <p class="note">「⚙ 要素」を開いて、戦力・調子・コンディション・戦術・試合環境・オッズなどを入力すると、確率（%）が自動で計算されます。% を直接入力することもできます（合計が100でなくても自動で正規化します）。予想ボタン（1=ホーム勝ち / 0=引き分け / 2=アウェイ勝ち）は手動でも切り替えられます。</p>
     <details>
       <summary>計算モデルについて</summary>
       <ul class="note">
-        <li>各チームの期待得点を基準 1.25 点として、以下の要素で増減させ、ポアソン分布からスコアごとの確率を出して 1/0/2 を集計します（引き分けは実際の傾向に合わせて少し上乗せ）。</li>
-        <li><b>基本能力</b>：0〜100（先発メンバーの平均的な実力の目安）。10ポイント差で、強いチームの期待得点が約1.16倍、弱いチームが約0.86倍になります。主力の欠場はここを下げて反映してください。</li>
-        <li><b>順位</b>：順位差1つにつき少しずつ上位チームに有利（10位差で期待得点比が約1.16倍）。能力と重なる部分があるので効果は控えめです。</li>
-        <li><b>監督・コーチ</b>：1〜5の評価。1段階差で期待得点比が約1.05倍。</li>
-        <li><b>過去の対戦成績</b>：勝ち越している側を有利にし、引き分けが多いカードは引き分け確率を上げます。対戦数が少ないうちは効果を弱めます。</li>
-        <li><b>ホームアドバンテージ</b>：ホームの期待得点を約1.13倍にします。</li>
-        <li><b>移動距離</b>：500kmごとに疲労が増えます（上限2,000km）。</li>
-        <li><b>前の試合の負担</b>：中日数が短いほど、また前の試合の負担が重いほど疲労が増えます。疲労は自分の得点を減らし、相手の得点を増やします。</li>
-        <li><b>戦術</b>：スタイル同士の相性（例：ハイプレスはポゼッションに強く、ロングボールやカウンターに弱い）に、試合ごとの「戦術補正」を足して評価します。</li>
+        <li>各チームの期待得点を「リーグ平均得点」から出発し、下の要素で増減させます。そこからポアソン分布でスコアごとの確率を出し、1/0/2 に集計します（引き分けは実際の傾向に合わせて少し上乗せ）。オッズを入れた試合は、モデルの確率とオッズの確率を「オッズの反映度」の割合で混ぜます。</li>
+        <li><b>戦力</b>：基本能力（10ポイント差で期待得点比 約1.35倍）、順位（10位差で約1.16倍）、監督・コーチ（1段階差で約1.05倍）、監督交代から3試合以内（約1.05倍の上振れ）。平均得点・平均失点を入れると、攻撃力と守備力を分けて評価し、試合全体の得点の多さにも反映します。</li>
+        <li><b>調子</b>：直近の結果の勝点ペースと、ホームチームのホーム成績・アウェイチームのアウェイ成績。試合数が少ないうちは平均に寄せて効果を弱めます。</li>
+        <li><b>コンディション</b>：移動距離（500kmごと）、中日数と前の試合の負担による疲労。主力の欠場は GK・DF が失点増、FW が得点減、MF がその両方に効きます。</li>
+        <li><b>戦術・意欲</b>：スタイル同士の相性と戦術補正、試合の重要度（消化試合は下げ、優勝・残留争いは上げる）。</li>
+        <li><b>試合環境</b>：ホームアドバンテージ（約1.13倍）、過去の対戦成績、天候・ピッチ（雨やピッチ不良は得点が減り、ポゼッションが不利・ロングボールが有利など）、審判の傾向。</li>
+        <li>各要素の重みは「4. 過去の結果で重みを調整」で、記録した実際の結果に合わせて自動調整できます。</li>
       </ul>
     </details>
     <div style="overflow-x:auto">
@@ -213,6 +227,34 @@
       <div class="lines" id="lines"></div>
     </div>
     <p class="note" id="msg"></p>
+  </section>
+
+  <section class="card">
+    <h2>4. 過去の結果で重みを調整</h2>
+    <p class="note">試合が終わったら、各試合の「⚙ 要素」で実際の結果を選び、「結果を履歴に保存」を押します。履歴がたまったら「重みを自動調整」で、各要素の効き方（重み）を過去の結果に合うように調整します。少ない試合数で調整すると偶然に引っぱられるので、30試合以上を目安にしてください。重み 1 が初期値、0 はその要素を使わない、2 は2倍効かせるという意味です。</p>
+    <div class="row">
+      <button id="btnSaveHist">結果を履歴に保存</button>
+      <button id="btnCalib" class="primary">重みを自動調整</button>
+      <button id="btnResetW">重みを初期値に戻す</button>
+    </div>
+    <div class="stats" style="margin-top:12px">
+      <div class="stat"><div class="k">履歴の試合数</div><div class="v" id="hN">0</div></div>
+      <div class="stat"><div class="k">最有力の的中率</div><div class="v" id="hAcc">-</div></div>
+      <div class="stat"><div class="k">ブライアスコア（小さいほど良い）</div><div class="v" id="hBrier">-</div></div>
+      <div class="stat"><div class="k">対数損失（小さいほど良い）</div><div class="v" id="hLL">-</div></div>
+    </div>
+    <div class="wgrid" id="weights"></div>
+    <p class="note" id="calibMsg"></p>
+    <details>
+      <summary>履歴のバックアップ・読み込み・消去</summary>
+      <p class="note">履歴はこのブラウザにだけ保存されます。別の端末に移すときは、書き出した文字列をコピーして、移動先で貼り付けて読み込んでください。</p>
+      <textarea id="histJson" placeholder="ここに書き出し／貼り付け"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button id="btnExport">書き出し</button>
+        <button id="btnImport">読み込み（追加）</button>
+        <button id="btnClearHist">履歴を消去</button>
+      </div>
+    </details>
   </section>
 
   <p class="note">※ 本ツールは入力された確率に基づく計算を行うだけで、的中を保証するものではありません。toto の購入は19歳以上に限られます。</p>
@@ -252,70 +294,171 @@
     return 0;
   }
 
+  const FACTOR_KEYS = ["能力", "順位", "監督", "監督交代", "攻守", "調子", "会場別成績", "ホーム", "移動", "負担",
+    "欠場", "戦術", "重要度", "対戦成績", "天候", "審判", "引き分け"];
+  const IMPORTANCE = [["低（消化試合）", -0.07], ["普通", 0], ["高（優勝・残留・昇格争い）", 0.04]];
+  // t: 試合全体の得点の増減（log）、style: スタイルごとの有利不利
+  const WEATHER = {
+    "良好": { t: 0, style: {} },
+    "雨": { t: -0.06, style: { "ポゼッション": -0.05, "ロングボール": 0.03, "カウンター": 0.03 } },
+    "強風": { t: -0.08, style: { "ロングボール": -0.04, "ポゼッション": 0.02 } },
+    "酷暑": { t: -0.05, style: { "ハイプレス": -0.05 }, heat: 1.5 },
+    "ピッチ不良": { t: -0.07, style: { "ポゼッション": -0.06, "ロングボール": 0.04 } },
+  };
+  const REFEREE = {
+    "標準": { t: 0, style: {} },
+    "笛が多い（PK・カード多め）": { t: 0.04, style: {} },
+    "流す（接触に寛容）": { t: -0.02, style: { "ハイプレス": 0.03, "ロングボール": 0.02 } },
+  };
+
+  function defaultWeights() { return Object.fromEntries(FACTOR_KEYS.map(k => [k, 1])); }
   function blankTeam(dist) {
-    return { rating: 70, rank: 10, coach: 3, dist, rest: 7, load: 0, style: "" };
+    return { rating: 70, rank: 10, coach: 3, newCoach: false, gf: "", ga: "", form: "", venue: "",
+      dist, rest: 7, load: 0, inj: { gk: 0, df: 0, mf: 0, fw: 0 }, imp: 1, style: "" };
   }
   function blankFactors() {
-    return { h: blankTeam(0), a: blankTeam(300), adj: 0, h2h: { hw: 0, d: 0, aw: 0 } };
+    return { h: blankTeam(0), a: blankTeam(300), adj: 0, h2h: { hw: 0, d: 0, aw: 0 },
+      weather: "良好", ref: "標準", odds: ["", "", ""], result: "" };
   }
   function blankMatch() {
     return { home: "", away: "", p: DEFAULT_P.slice(), pick: [true, false, false], f: blankFactors(), open: false };
+  }
+  function fillTeam(t, dist) {
+    t = Object.assign(blankTeam(dist), t);
+    t.inj = Object.assign({ gk: 0, df: 0, mf: 0, fw: 0 }, t.inj);
+    return t;
+  }
+  function fillFactors(f) {
+    f = Object.assign(blankFactors(), f || {});
+    f.h = fillTeam(f.h, 0);
+    f.a = fillTeam(f.a, 300);
+    f.h2h = Object.assign({ hw: 0, d: 0, aw: 0 }, f.h2h);
+    return f;
   }
   function ensureMatches() {
     while (state.matches.length < state.game) state.matches.push(blankMatch());
     state.matches.length = state.game;
     // 古い保存データに新しい項目を補う
-    state.matches.forEach(m => {
-      const def = blankFactors();
-      m.f = Object.assign(def, m.f || {});
-      m.f.h = Object.assign(blankTeam(0), m.f.h);
-      m.f.a = Object.assign(blankTeam(300), m.f.a);
-      m.f.h2h = Object.assign({ hw: 0, d: 0, aw: 0 }, m.f.h2h);
-    });
+    state.matches.forEach(m => { m.f = fillFactors(m.f); });
+    state.w = Object.assign(defaultWeights(), state.w);
+    if (state.oddsW == null) state.oddsW = 0.5;
+    if (state.leagueAvg == null) state.leagueAvg = 1.3;
+    if (!Array.isArray(state.history)) state.history = [];
   }
 
+  const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+
   // 疲労度（対数スケール）：移動距離 + 中日数 + 前の試合の負担
-  function fatigue(t) {
+  function fatigue(t, heat = 1) {
     const travel = 0.04 * Math.min(Math.max(0, t.dist) / 500, 4);
     const rest = t.rest <= 2 ? 0.12 : t.rest === 3 ? 0.07 : t.rest === 4 ? 0.03 : 0;
     const load = [0, 0.03, 0.07][t.load] || 0;
-    return { travel, rest: rest + load };
+    return { travel: travel * heat, rest: (rest + load) * heat };
   }
 
-  // 要素から期待得点と 1/0/2 の確率を計算
-  function model(f) {
-    const BASE = 1.25, HOME_ADV = 0.12, PER_RATING = 0.03, PER_RANK = 0.015, PER_COACH = 0.05,
-      PER_TACTIC = 0.07, H2H = 0.4, DRAW_BOOST = 1.1;
-    const fh = fatigue(f.h), fa = fatigue(f.a);
-    const tactic = tacticEdge(f.h.style, f.a.style) + Number(f.adj || 0);
-    // 過去の対戦成績：対戦数が少ないうちは効果を弱める（+4 試合分だけ互角に寄せる）
+  // 直近の結果（勝分負 / ○△● / WDL）→ 試合数と1試合あたり勝点
+  function parseForm(s) {
+    let w = 0, d = 0, l = 0;
+    for (const c of String(s || "")) {
+      if ("W○勝wＷ".includes(c)) w++;
+      else if ("D△分dＤ".includes(c)) d++;
+      else if ("L●負敗lＬ".includes(c)) l++;
+    }
+    const n = w + d + l;
+    return { n, ppg: n ? (3 * w + d) / n : 0 };
+  }
+  // 「8-3-4」「8勝3分4敗」→ 試合数と1試合あたり勝点
+  function parseRecord(s) {
+    const v = String(s || "").match(/\d+/g);
+    if (!v || v.length < 3) return { n: 0, ppg: 0 };
+    const [w, d, l] = v.slice(0, 3).map(Number), n = w + d + l;
+    return { n, ppg: n ? (3 * w + d) / n : 0 };
+  }
+  // 試合数が少ないときは平均 avg に寄せる
+  const shrink = (r, avg, k) => avg + (r.ppg - avg) * r.n / (r.n + k);
+
+  function injury(t) {
+    const gk = clamp(Number(t.inj.gk) || 0, 0, 1), df = clamp(Number(t.inj.df) || 0, 0, 5);
+    const mf = clamp(Number(t.inj.mf) || 0, 0, 5), fw = clamp(Number(t.inj.fw) || 0, 0, 5);
+    return { att: -(0.02 * mf + 0.05 * fw), leak: 0.10 * gk + 0.04 * df + 0.02 * mf };
+  }
+
+  // 要素から期待得点と 1/0/2 の確率を計算（W: 要素ごとの重み）
+  function model(f, W = state.w) {
+    const L = Number(state.leagueAvg) || 1.3, H = f.h, A = f.a;
+    const wx = WEATHER[f.weather] || WEATHER["良好"], rf = REFEREE[f.ref] || REFEREE["標準"];
+    // r: log(ホーム期待得点 / アウェイ期待得点) への寄与（+ はホーム有利）、t: 両チーム合計の得点への寄与
+    const P = {};
+    const add = (k, r, t = 0) => { P[k] = { r, t }; };
+
+    add("能力", 0.03 * (H.rating - A.rating));
+    add("順位", 0.015 * (A.rank - H.rank));
+    add("監督", 0.05 * (H.coach - A.coach));
+    add("監督交代", 0.05 * ((H.newCoach ? 1 : 0) - (A.newCoach ? 1 : 0)));
+
+    const atkDef = t => ({
+      att: t.gf !== "" && Number(t.gf) > 0 ? 0.5 * Math.log(clamp(Number(t.gf), 0.2, 4) / L) : 0,
+      leak: t.ga !== "" && Number(t.ga) > 0 ? 0.5 * Math.log(clamp(Number(t.ga), 0.2, 4) / L) : 0,
+    });
+    const ah = atkDef(H), aa = atkDef(A);
+    add("攻守", (ah.att + aa.leak) - (aa.att + ah.leak), ah.att + aa.leak + aa.att + ah.leak);
+
+    add("調子", 0.08 * (shrink(parseForm(H.form), 1.4, 2) - shrink(parseForm(A.form), 1.4, 2)));
+    add("会場別成績", 0.10 * ((shrink(parseRecord(H.venue), 1.6, 6) - 1.6) - (shrink(parseRecord(A.venue), 1.15, 6) - 1.15)));
+    add("ホーム", 0.12, 0.12);
+
+    const fh = fatigue(H, wx.heat), fa = fatigue(A, wx.heat);
+    add("移動", fa.travel - fh.travel, -0.2 * (fh.travel + fa.travel));
+    add("負担", fa.rest - fh.rest, -0.2 * (fh.rest + fa.rest));
+
+    const ih = injury(H), ia = injury(A);
+    add("欠場", (ih.att + ia.leak) - (ia.att + ih.leak), ih.att + ia.leak + ia.att + ih.leak);
+
+    add("戦術", 0.07 * (tacticEdge(H.style, A.style) + Number(f.adj || 0)));
+    add("重要度", (IMPORTANCE[H.imp] || IMPORTANCE[1])[1] - (IMPORTANCE[A.imp] || IMPORTANCE[1])[1]);
+
     const { hw, d: hd, aw } = f.h2h, n = hw + hd + aw;
-    const h2h = H2H * (hw - aw) / (n + 4);
-    const drawBoost = DRAW_BOOST * (1 + 0.6 * (hd - 0.27 * n) / (n + 4));
-    // ホーム視点の有利度（log(ホーム期待得点 / アウェイ期待得点) への寄与）
-    const parts = {
-      能力: PER_RATING * (f.h.rating - f.a.rating),
-      順位: PER_RANK * (f.a.rank - f.h.rank),
-      監督: PER_COACH * (f.h.coach - f.a.coach),
-      ホーム: HOME_ADV,
-      移動: fa.travel - fh.travel,
-      負担: fa.rest - fh.rest,
-      戦術: PER_TACTIC * tactic,
-      対戦成績: h2h,
-    };
-    // 疲労以外は両チームに半分ずつ（ホームアドバンテージはホームのみ）
-    const sym = parts.能力 + parts.順位 + parts.監督 + parts.戦術 + parts.対戦成績;
-    const lh = BASE * Math.exp(sym / 2 + HOME_ADV - 0.6 * (fh.travel + fh.rest) + 0.4 * (fa.travel + fa.rest));
-    const la = BASE * Math.exp(-sym / 2 - 0.6 * (fa.travel + fa.rest) + 0.4 * (fh.travel + fh.rest));
-    const pois = (l, k) => { let v = Math.exp(-l); for (let i = 1; i <= k; i++) v *= l / i; return v; };
+    add("対戦成績", 0.4 * (hw - aw) / (n + 4));
+    add("天候", (wx.style[H.style] || 0) - (wx.style[A.style] || 0), wx.t);
+    add("審判", (rf.style[H.style] || 0) - (rf.style[A.style] || 0), rf.t);
+
+    let R = 0, T = 0;
+    const parts = {};
+    Object.entries(P).forEach(([k, v]) => {
+      const w = W[k] ?? 1;
+      R += w * v.r; T += w * v.t; parts[k] = w * v.r;
+    });
+    const lh = L * Math.exp((T + R) / 2), la = L * Math.exp((T - R) / 2);
+    // 引き分けの上乗せ（引き分けが多いカードはさらに上げる）
+    const drawBoost = Math.pow(1.1 * (1 + 0.6 * (hd - 0.27 * n) / (n + 4)), W["引き分け"] ?? 1);
+
+    const ph = [], pa = [];
+    for (let i = 0, eh = Math.exp(-lh), ea = Math.exp(-la); i <= 10; i++) {
+      ph.push(eh); pa.push(ea); eh *= lh / (i + 1); ea *= la / (i + 1);
+    }
     let w = 0, d = 0, a = 0, best = { p: -1 };
     for (let i = 0; i <= 10; i++) for (let j = 0; j <= 10; j++) {
-      const v = pois(lh, i) * pois(la, j) * (i === j ? drawBoost : 1);
+      const v = ph[i] * pa[j] * (i === j ? drawBoost : 1);
       if (i > j) w += v; else if (i === j) d += v; else a += v;
       if (v > best.p) best = { p: v, s: `${i}-${j}` };
     }
     const tot = w + d + a;
-    return { lh, la, score: best.s, tactic, parts, pct: roundPct([w / tot, d / tot, a / tot]) };
+    return { lh, la, score: best.s, parts, probs: [w / tot, d / tot, a / tot] };
+  }
+
+  // ブックメーカーのオッズ（10進）→ 控除分を除いた確率
+  function oddsProbs(f) {
+    const o = f.odds.map(Number);
+    if (o.some(x => !(x > 1))) return null;
+    const inv = o.map(x => 1 / x), s = inv[0] + inv[1] + inv[2];
+    return inv.map(x => x / s);
+  }
+
+  // モデルとオッズを混ぜた最終確率
+  function finalProbs(f) {
+    const r = model(f), op = oddsProbs(f), w = op ? clamp(state.oddsW, 0, 1) : 0;
+    const p = r.probs.map((x, k) => (1 - w) * x + w * (op ? op[k] : 0));
+    return { ...r, odds: op, final: p, pct: roundPct(p) };
   }
 
   // 合計がちょうど 100 になるように整数 % へ丸める
@@ -326,7 +469,49 @@
     return fl;
   }
 
-  function applyModel(m) { m.p = model(m.f).pct; }
+  function applyModel(m) { m.p = finalProbs(m.f).pct; }
+
+  // ---- 履歴による重みの調整 ----
+  function evalHistory(W) {
+    const H = state.history, n = H.length;
+    if (!n) return null;
+    let ll = 0, br = 0, hit = 0;
+    H.forEach(h => {
+      const p = model(h.f, W).probs;
+      ll -= Math.log(Math.max(p[h.result], 1e-9));
+      br += p.reduce((s, x, k) => s + (x - (k === h.result ? 1 : 0)) ** 2, 0);
+      if (p.indexOf(Math.max(...p)) === h.result) hit++;
+    });
+    return { n, ll: ll / n, brier: br / n, acc: hit / n };
+  }
+
+  // 対数損失 + 初期値 1 から離れすぎないための罰則 を最小化（座標ごとの探索）
+  function calibrate() {
+    const keys = FACTOR_KEYS;
+    const loss = W => {
+      let s = 0;
+      state.history.forEach(h => { s -= Math.log(Math.max(model(h.f, W).probs[h.result], 1e-9)); });
+      keys.forEach(k => { s += 2 * (W[k] - 1) ** 2; });
+      return s;
+    };
+    let W = { ...state.w }, cur = loss(W);
+    for (const step of [0.5, 0.25, 0.1, 0.05]) {
+      for (let it = 0; it < 10; it++) {
+        let improved = false;
+        keys.forEach(k => {
+          for (const dlt of [step, -step]) {
+            const v = Math.round(clamp(W[k] + dlt, 0, 3) * 100) / 100;
+            if (v === W[k]) continue;
+            const W2 = { ...W, [k]: v }, l = loss(W2);
+            if (l < cur - 1e-9) { cur = l; W = W2; improved = true; }
+          }
+        });
+        if (!improved) break;
+      }
+    }
+    state.w = W;
+  }
+
   function load() {
     try { return JSON.parse(localStorage.getItem(STORE_KEY)); } catch { return null; }
   }
@@ -345,6 +530,9 @@
     $("game").value = String(state.game);
     $("budget").value = state.budget;
     $("unit").value = state.unit;
+    $("leagueAvg").value = state.leagueAvg;
+    $("oddsW").value = Math.round(state.oddsW * 100);
+    renderCalib();
     const tb = $("tbody");
     tb.innerHTML = "";
     state.matches.forEach((m, i) => {
@@ -387,27 +575,44 @@
     const tr = document.createElement("tr");
     tr.className = "factors";
     tr.hidden = !m.open;
-    const r = model(m.f);
+    const r = finalProbs(m.f);
     const sign = x => (x >= 0 ? "+" : "−") + Math.abs(x).toFixed(2);
+    const opt = (list, cur) => list.map(([v, l]) => `<option value="${esc(v)}"${String(cur) === String(v) ? " selected" : ""}>${esc(l)}</option>`).join("");
     const teamForm = (side, name) => {
       const t = m.f[side];
+      const num = (k, v, attrs = "") => `<input type="number" data-s="${side}" data-k="${k}" value="${esc(v)}" ${attrs}>`;
+      const txt = (k, v, ph) => `<input type="text" data-s="${side}" data-k="${k}" value="${esc(v)}" placeholder="${ph}">`;
+      const sel = (k, list, cur) => `<select data-s="${side}" data-k="${k}">${opt(list, cur)}</select>`;
+      const cnt = n => Array.from({ length: n + 1 }, (_, i) => [i, `${i}人`]);
       return `<fieldset class="fx-team"><legend>${esc(name)}</legend>
-        <label>基本能力（0〜100）<input type="number" min="0" max="100" data-s="${side}" data-k="rating" value="${t.rating}"></label>
-        <label>順位<input type="number" min="1" max="40" data-s="${side}" data-k="rank" value="${t.rank}"></label>
-        <label>監督・コーチ<select data-s="${side}" data-k="coach">${COACH.map((c, k) =>
-          `<option value="${k + 1}"${t.coach === k + 1 ? " selected" : ""}>${k + 1}：${c}</option>`).join("")}</select></label>
-        <label>移動距離（km）<input type="number" min="0" step="50" data-s="${side}" data-k="dist" value="${t.dist}"></label>
-        <label>中日数<input type="number" min="1" max="30" data-s="${side}" data-k="rest" value="${t.rest}"></label>
-        <label>前の試合の負担<select data-s="${side}" data-k="load">${LOADS.map((l, k) =>
-          `<option value="${k}"${t.load === k ? " selected" : ""}>${l}</option>`).join("")}</select></label>
-        <label>戦術スタイル<select data-s="${side}" data-k="style"><option value="">未設定</option>${STYLES.map(st =>
-          `<option${t.style === st ? " selected" : ""}>${st}</option>`).join("")}</select></label>
+        <div class="fx-h">戦力</div>
+        <label>基本能力（0〜100）${num("rating", t.rating, 'min="0" max="100"')}</label>
+        <label>順位${num("rank", t.rank, 'min="1" max="40"')}</label>
+        <label>平均得点${num("gf", t.gf, 'min="0" step="0.1" placeholder="未入力"')}</label>
+        <label>平均失点${num("ga", t.ga, 'min="0" step="0.1" placeholder="未入力"')}</label>
+        <label>監督・コーチ${sel("coach", COACH.map((c, k) => [k + 1, `${k + 1}：${c}`]), t.coach)}</label>
+        <label class="chk"><input type="checkbox" data-s="${side}" data-k="newCoach"${t.newCoach ? " checked" : ""}>監督交代から3試合以内</label>
+        <div class="fx-h">調子</div>
+        <label>直近の結果（古い順）${txt("form", t.form, "例: 勝勝分負勝")}</label>
+        <label>${side === "h" ? "ホームでの成績" : "アウェイでの成績"}（勝-分-敗）${txt("venue", t.venue, "例: 8-3-4")}</label>
+        <div class="fx-h">コンディション</div>
+        <label>移動距離（km）${num("dist", t.dist, 'min="0" step="50"')}</label>
+        <label>中日数${num("rest", t.rest, 'min="1" max="30"')}</label>
+        <label>前の試合の負担${sel("load", LOADS.map((l, k) => [k, l]), t.load)}</label>
+        <label>主力の欠場：GK${sel("inj.gk", cnt(1), t.inj.gk)}</label>
+        <label>主力の欠場：DF${sel("inj.df", cnt(5), t.inj.df)}</label>
+        <label>主力の欠場：MF${sel("inj.mf", cnt(5), t.inj.mf)}</label>
+        <label>主力の欠場：FW${sel("inj.fw", cnt(5), t.inj.fw)}</label>
+        <div class="fx-h">戦術・意欲</div>
+        <label>戦術スタイル${sel("style", [["", "未設定"]].concat(STYLES.map(st => [st, st])), t.style)}</label>
+        <label>試合の重要度${sel("imp", IMPORTANCE.map(([l], k) => [k, l]), t.imp)}</label>
       </fieldset>`;
     };
     const edge = tacticEdge(m.f.h.style, m.f.a.style);
     const edgeText = !m.f.h.style || !m.f.a.style ? "スタイル未設定"
       : edge > 0 ? `${m.f.h.style} は ${m.f.a.style} が得意（ホーム有利）`
       : edge < 0 ? `${m.f.a.style} は ${m.f.h.style} が得意（アウェイ有利）` : "スタイル相性は互角";
+    const pc = v => (v * 100).toFixed(0) + "%";
     tr.innerHTML = `<td colspan="8">
       <div class="fx">${teamForm("h", m.home || "ホーム")}${teamForm("a", m.away || "アウェイ")}</div>
       <div class="fx-adj">
@@ -418,31 +623,65 @@
       <div class="fx-adj">
         <span class="note" style="align-self:center">過去の対戦成績（直近）</span>
         ${[["hw", `${m.home || "ホーム"}の勝ち`], ["d", "引き分け"], ["aw", `${m.away || "アウェイ"}の勝ち`]].map(([k, l]) =>
-          `<label>${esc(l)}<input type="number" min="0" max="50" data-h="${k}" value="${m.f.h2h[k]}" style="width:5em"></label>`).join("")}
-        <button data-apply>この要素で確率を再計算</button>
+          `<label>${esc(l)}<input type="number" min="0" max="50" data-h="${k}" value="${m.f.h2h[k]}"></label>`).join("")}
+      </div>
+      <div class="fx-adj">
+        <label>天候・ピッチ<select data-m="weather">${opt(Object.keys(WEATHER).map(k => [k, k]), m.f.weather)}</select></label>
+        <label>審判の傾向<select data-m="ref">${opt(Object.keys(REFEREE).map(k => [k, k]), m.f.ref)}</select></label>
+      </div>
+      <div class="fx-adj">
+        <span class="note" style="align-self:center">ブックメーカーのオッズ（10進）</span>
+        ${OUT.map((o, k) => `<label>${o}<input type="number" min="1" step="0.01" data-o="${k}" value="${esc(m.f.odds[k])}" placeholder="例: 2.10"></label>`).join("")}
+        <label>実際の結果（試合後）<select data-m="result">${opt([["", "未入力"]].concat(OUT.map((o, k) => [k, o])), m.f.result)}</select></label>
       </div>
       <div class="fx-out">
-        期待得点 <b>${r.lh.toFixed(2)} − ${r.la.toFixed(2)}</b> ／ 最も可能性が高いスコア <b>${r.score}</b> ／
-        モデル確率 1: <b>${r.pct[0]}%</b>　0: <b>${r.pct[1]}%</b>　2: <b>${r.pct[2]}%</b>
-        <div class="contrib">${Object.entries(r.parts).map(([k, v]) =>
+        期待得点 <b>${r.lh.toFixed(2)} − ${r.la.toFixed(2)}</b> ／ 最も可能性が高いスコア <b>${r.score}</b><br>
+        モデル 1: <b>${pc(r.probs[0])}</b>　0: <b>${pc(r.probs[1])}</b>　2: <b>${pc(r.probs[2])}</b>
+        ${r.odds ? `／ オッズ 1: <b>${pc(r.odds[0])}</b>　0: <b>${pc(r.odds[1])}</b>　2: <b>${pc(r.odds[2])}</b>
+        ／ 最終（反映度 ${Math.round(state.oddsW * 100)}%） 1: <b>${r.pct[0]}%</b>　0: <b>${r.pct[1]}%</b>　2: <b>${r.pct[2]}%</b>` : ""}
+        <div class="contrib">${Object.entries(r.parts).filter(([k, v]) => k === "ホーム" || Math.abs(v) > 0.005).map(([k, v]) =>
           `<span class="${v > 0.005 ? "pos" : v < -0.005 ? "neg" : ""}">${k} ${sign(v)}</span>`).join("")}
           <span class="note">（＋はホーム有利、−はアウェイ有利）</span></div>
       </div>
     </td>`;
+    const update = () => { applyModel(m); save(); render(); };
     tr.querySelectorAll("[data-h]").forEach(el => el.addEventListener("change", () => {
-      m.f.h2h[el.dataset.h] = Math.max(0, Math.floor(Number(el.value) || 0));
-      applyModel(m); save(); render();
+      m.f.h2h[el.dataset.h] = Math.max(0, Math.floor(Number(el.value) || 0)); update();
+    }));
+    tr.querySelectorAll("[data-o]").forEach(el => el.addEventListener("change", () => {
+      m.f.odds[+el.dataset.o] = el.value; update();
+    }));
+    tr.querySelectorAll("[data-m]").forEach(el => el.addEventListener("change", () => {
+      const k = el.dataset.m;
+      m.f[k] = k === "result" ? (el.value === "" ? "" : Number(el.value)) : el.value;
+      if (k === "result") { save(); return; }
+      update();
     }));
     tr.querySelectorAll("[data-s]").forEach(el => el.addEventListener("change", () => {
       const t = m.f[el.dataset.s], k = el.dataset.k;
-      t[k] = k === "style" ? el.value : Math.max(0, Number(el.value) || 0);
-      applyModel(m); save(); render();
+      if (k.startsWith("inj.")) t.inj[k.slice(4)] = Number(el.value);
+      else if (k === "newCoach") t[k] = el.checked;
+      else if (["style", "form", "venue", "gf", "ga"].includes(k)) t[k] = el.value;
+      else t[k] = Math.max(0, Number(el.value) || 0);
+      update();
     }));
-    tr.querySelector("[data-adj]").addEventListener("change", e => {
-      m.f.adj = Number(e.target.value); applyModel(m); save(); render();
-    });
-    tr.querySelector("[data-apply]").addEventListener("click", () => { applyModel(m); save(); render(); });
+    tr.querySelector("[data-adj]").addEventListener("change", e => { m.f.adj = Number(e.target.value); update(); });
     return tr;
+  }
+
+  function renderCalib() {
+    const ev = evalHistory(state.w);
+    $("hN").textContent = state.history.length + " 試合";
+    $("hAcc").textContent = ev ? (ev.acc * 100).toFixed(1) + "%" : "-";
+    $("hBrier").textContent = ev ? ev.brier.toFixed(3) : "-";
+    $("hLL").textContent = ev ? ev.ll.toFixed(3) : "-";
+    const g = $("weights");
+    g.innerHTML = FACTOR_KEYS.map(k =>
+      `<label class="${state.w[k] !== 1 ? "changed" : ""}">${k}<input type="number" min="0" max="3" step="0.05" data-w="${k}" value="${state.w[k]}"></label>`).join("");
+    g.querySelectorAll("[data-w]").forEach(el => el.addEventListener("change", () => {
+      state.w[el.dataset.w] = clamp(Number(el.value) || 0, 0, 3);
+      state.matches.forEach(applyModel); save(); render();
+    }));
   }
 
   function esc(s) {
@@ -569,6 +808,71 @@
   $("budget").addEventListener("change", e => { state.budget = Math.max(0, +e.target.value || 0); save(); summarize(); });
   $("unit").addEventListener("change", e => { state.unit = Math.max(1, +e.target.value || 100); save(); summarize(); });
   $("btnOptimize").addEventListener("click", optimize);
+  $("leagueAvg").addEventListener("change", e => {
+    state.leagueAvg = clamp(Number(e.target.value) || 1.3, 0.5, 3); state.matches.forEach(applyModel); save(); render();
+  });
+  $("oddsW").addEventListener("change", e => {
+    state.oddsW = clamp((Number(e.target.value) || 0) / 100, 0, 1); state.matches.forEach(applyModel); save(); render();
+  });
+  $("btnSaveHist").addEventListener("click", () => {
+    const done = state.matches.filter(m => m.f.result !== "");
+    if (!done.length) { $("calibMsg").textContent = "実際の結果が入力された試合がありません。各試合の「⚙ 要素」で結果を選んでください。"; return; }
+    const date = new Date().toISOString().slice(0, 10);
+    done.forEach(m => {
+      const f = JSON.parse(JSON.stringify(m.f));
+      const result = f.result; delete f.result;
+      state.history.push({ date, home: m.home, away: m.away, f, result });
+      m.f.result = "";
+    });
+    save(); render();
+    $("calibMsg").textContent = `${done.length} 試合を履歴に保存しました。`;
+  });
+  $("btnCalib").addEventListener("click", () => {
+    const n = state.history.length;
+    if (!n) { $("calibMsg").textContent = "履歴がありません。先に試合結果を保存してください。"; return; }
+    const before = evalHistory(state.w);
+    calibrate();
+    const after = evalHistory(state.w);
+    state.matches.forEach(applyModel); save(); render();
+    $("calibMsg").textContent = `${n} 試合で調整しました。対数損失 ${before.ll.toFixed(3)} → ${after.ll.toFixed(3)}` +
+      (n < 30 ? "（試合数が少ないので、調整結果は参考程度にしてください）" : "");
+  });
+  $("btnResetW").addEventListener("click", () => {
+    state.w = defaultWeights(); state.matches.forEach(applyModel); save(); render();
+    $("calibMsg").textContent = "重みを初期値に戻しました。";
+  });
+  $("btnExport").addEventListener("click", () => {
+    $("histJson").value = JSON.stringify({ history: state.history, w: state.w });
+    $("histJson").select();
+    $("calibMsg").textContent = "書き出しました。テキストをコピーして保存してください。";
+  });
+  $("btnImport").addEventListener("click", () => {
+    try {
+      const d = JSON.parse($("histJson").value);
+      const list = Array.isArray(d) ? d : d.history;
+      if (!Array.isArray(list)) throw new Error();
+      const ok = list.filter(h => h && h.f && [0, 1, 2].includes(h.result)).map(h => ({ ...h, f: fillFactors(h.f) }));
+      state.history.push(...ok);
+      if (d.w && !Array.isArray(d)) state.w = Object.assign(defaultWeights(), d.w);
+      state.matches.forEach(applyModel); save(); render();
+      $("calibMsg").textContent = `${ok.length} 試合を読み込みました。`;
+    } catch {
+      $("calibMsg").textContent = "読み込めませんでした。書き出した文字列をそのまま貼り付けてください。";
+    }
+  });
+  let clearArmed = null;
+  $("btnClearHist").addEventListener("click", () => {
+    const btn = $("btnClearHist");
+    if (!clearArmed) {
+      btn.textContent = "もう一度押すと履歴を消去"; btn.classList.add("danger");
+      clearArmed = setTimeout(() => { clearArmed = null; btn.textContent = "履歴を消去"; btn.classList.remove("danger"); }, 4000);
+      return;
+    }
+    clearTimeout(clearArmed); clearArmed = null;
+    btn.textContent = "履歴を消去"; btn.classList.remove("danger");
+    state.history = []; save(); render();
+    $("calibMsg").textContent = "履歴を消去しました。";
+  });
   $("btnModelAll").addEventListener("click", () => { state.matches.forEach(applyModel); save(); render(); });
   $("btnRandom").addEventListener("click", randomPick);
   $("btnPaste").addEventListener("click", applyPaste);
@@ -583,7 +887,7 @@
     }
     clearTimeout(resetArmed); resetArmed = null;
     btn.textContent = "リセット"; btn.classList.remove("danger");
-    state = { game: state.game, budget: 1600, unit: 100, matches: [] };
+    state = { ...state, budget: 1600, unit: 100, matches: [] };
     ensureMatches(); save(); render();
     $("msg").textContent = "すべての入力を消去しました。";
   });
