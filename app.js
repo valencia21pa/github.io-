@@ -272,8 +272,13 @@ function renderMatchup() {
 
   // 自キャラがアバの時だけ、アバ視点のメモを出す
   const aba = state.mine === "aba" && ABA_NOTES[state.opp];
-  $("abaInfo").classList.toggle("hidden", !aba);
-  if (aba) {
+  $("abaInfo").classList.toggle("hidden", !aba && state.mine === "aba");
+  if (state.mine !== "aba") {
+    $("abaInfo").innerHTML = `
+      <h2>${esc(mine.name)} で使う時の注意</h2>
+      <p>上の対策文はアバで戦う前提で書いています。相手の技の性質・ガード方向・「何をされたら何をする」はそのまま使えますが、確反の技名（近S・2Pなど）や「無敵技が無い」といった自分側の話はアバのものです。</p>
+      <p>${esc(mine.name)}で反撃できるかは、<b>フレームタブの「${esc(mine.name)}の反撃」列</b>で確認してください（フレームデータから自動計算。届くかは距離次第）。</p>`;
+  } else if (aba) {
     $("abaInfo").innerHTML = `
       <h2>アバで ${esc(opp.name)} と戦う時</h2>
       <dl class="kv">
@@ -308,6 +313,33 @@ const jpName = (cid, m) => (typeof JP_NAMES !== "undefined" && JP_NAMES[cid] && 
 // フレームタブの絞り込み状態（タブ切り替えでも保持）
 let frameFilter = { q: "", punish: false, specials: false, sort: "" };
 const advNum = v => { const n = parseInt(String(v ?? "").replace(/^[^\d+-]*/, ""), 10); return isNaN(n) ? null : n; };
+// 自キャラの反撃候補（地上の通常技・必殺技・覚醒必殺技のうち、発生が数値で取れるもの）
+const startupNum = v => {
+  const t = String(v ?? "").replace(/\(.*?\)/g, "");
+  const m = t.match(/^\s*(\d+)(?:\s*\+\s*(\d+))?/);
+  return m ? (+m[1]) + (m[2] ? +m[2] : 0) : null;
+};
+function punishersFor(cid) {
+  return framesFor(cid).filter(m => {
+    const i = m.input || "";
+    if (/^j\.|^66$|6D or 4D|^5D$|5\[D\]|236D|236\[D\]|During|~|^\[/.test(i)) return false;
+    if (/^(2|5|6|c\.|f\.)/.test(i) && !/\d{3}/.test(i)) return true;        // 地上の通常技・特殊技
+    return /^(236|214|623|632146|214214|236236)[PKSH]/.test(i);                // 地上の必殺技・覚醒必殺技
+  }).map(m => ({ m, s: startupNum(m.startup) })).filter(x => x.s);
+}
+function punishCell(onBlock, cid, list) {
+  const adv = advNum(onBlock);
+  if (adv === null || adv > -1) return "<span class='muted'>—</span>";
+  const fits = list.filter(x => x.s <= -adv);
+  if (!fits.length) return "<span class='muted'>なし</span>";
+  const nm = x => jpName(cid, x.m) || x.m.input;
+  const by = inp => fits.find(x => x.m.input === inp);
+  const main = ["c.S", "2K", "5K", "2P", "5P"].map(by).find(Boolean) || fits.reduce((a, b) => (b.s < a.s ? b : a));
+  const heavy = ["5H", "2H"].map(by).filter(Boolean);
+  let out = `${esc(nm(main))}<span class="muted">(${main.s}F)</span>`;
+  if (heavy.length) out += `<div class="muted small">${heavy.map(x => esc(nm(x)) + "(" + x.s + "F)").join("・")}も間に合う</div>`;
+  return out;
+}
 function renderFrames() {
   const opp = charById(state.opp);
   $("framesTitle").textContent = `${opp.name} のフレームデータ`;
@@ -319,6 +351,7 @@ function renderFrames() {
     return;
   }
   const f = frameFilter, q = f.q.trim().toLowerCase();
+  const myPun = punishersFor(state.mine);
   let rows = all.filter(m =>
     (!q || (m.name + " " + m.input + " " + (jpName(opp.id, m) || "")).toLowerCase().includes(q)) &&
     (!f.punish || (advNum(m.onBlock) ?? 0) <= -5) &&
@@ -345,14 +378,14 @@ function renderFrames() {
         </select>
       </label>
     </div>
-    <p class="muted">${rows.length} / ${all.length} 技。ガード後 −5 以下は赤字（−5/−6 は 2P・5P 級、−7 以下で近S・2K 始動、−10 以下で最大）。[ ] は溜め版、( IAD ) は低空時の値。</p>
+    <p class="muted">${rows.length} / ${all.length} 技。ガード後 −5 以下は赤字（−5/−6 は 2P・5P 級、−7 以下で近S・2K 始動、−10 以下で最大）。[ ] は溜め版、( IAD ) は低空時の値。「${esc(charById(state.mine).name)}の反撃」は発生がガード後の不利以内に収まる技（近S→2K→5K→2P→5P の順で間に合う物。5H・2Hが間に合えば併記）。リーチは考慮していないので、届くかは距離次第。</p>
     <div class="table-wrap"><table>
-      <thead><tr><th>技</th><th>入力</th><th class="num">発生</th><th class="num">持続</th><th class="num">硬直</th><th class="num">ガード後</th><th class="num">ヒット後</th><th>ガード</th><th>Lv</th></tr></thead>
+      <thead><tr><th>技</th><th>入力</th><th class="num">発生</th><th class="num">持続</th><th class="num">硬直</th><th class="num">ガード後</th><th class="num">ヒット後</th><th>ガード</th><th>Lv</th><th>${esc(charById(state.mine).name)}の反撃</th></tr></thead>
       <tbody>${rows.map(m => `<tr>
         <td>${jpName(opp.id, m) ? `${esc(jpName(opp.id, m))}${m.name ? `<div class="muted small">${esc(m.name)}</div>` : ""}` : esc(m.name)}</td><td>${esc(m.input)}</td>
         <td class="num">${esc(m.startup)}</td><td class="num">${esc(m.active)}</td><td class="num">${esc(m.recovery)}</td>
         <td class="num">${fmtAdv(m.onBlock)}</td><td class="num">${fmtAdv(m.onHit)}</td>
-        <td>${esc(m.guard)}</td><td>${esc(m.level)}</td></tr>`).join("") || "<tr><td colspan='9' class='muted'>該当なし</td></tr>"}</tbody>
+        <td>${esc(m.guard)}</td><td>${esc(m.level)}</td><td>${punishCell(m.onBlock, state.mine, myPun)}</td></tr>`).join("") || "<tr><td colspan='10' class='muted'>該当なし</td></tr>"}</tbody>
     </table></div>`;
 }
 
