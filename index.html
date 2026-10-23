@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>toto 予想ツール</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --text: #1d2330; --muted: #6b7280;
+    --line: #e2e5ea; --accent: #0b7a3e; --accent-weak: #e3f3ea;
+    --home: #1f6fd1; --draw: #8a8f98; --away: #d1491f; --warn: #b45309;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #11141a; --card: #1a1f27; --text: #e7eaf0; --muted: #9aa3b2;
+      --line: #2c333e; --accent: #34c27a; --accent-weak: #1c3a2a;
+      --home: #5b9bf0; --draw: #a3a9b3; --away: #f07a55; --warn: #f0b35b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    line-height: 1.5;
+  }
+  header { padding: 20px 16px 8px; max-width: 960px; margin: 0 auto; }
+  header h1 { margin: 0; font-size: 1.5rem; }
+  header p { margin: 4px 0 0; color: var(--muted); font-size: .9rem; }
+  main { max-width: 960px; margin: 0 auto; padding: 8px 16px 40px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  .card h2 { margin: 0 0 12px; font-size: 1.05rem; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+  label { font-size: .85rem; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+  input, select, textarea, button { font: inherit; color: inherit; }
+  input[type=text], input[type=number], select, textarea {
+    background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px;
+  }
+  textarea { width: 100%; min-height: 90px; }
+  button {
+    background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 14px; cursor: pointer;
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button:hover { filter: brightness(1.05); }
+  details summary { cursor: pointer; color: var(--muted); font-size: .9rem; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 6px 4px; border-bottom: 1px solid var(--line); text-align: center; font-size: .9rem; }
+  th { color: var(--muted); font-weight: 500; font-size: .8rem; }
+  td.team input { width: 100%; min-width: 0; }
+  td.pct input { width: 4.2em; text-align: right; }
+  .picks { display: inline-flex; gap: 4px; }
+  .pick {
+    width: 2.2em; height: 2.2em; padding: 0; border-radius: 6px; font-weight: 700;
+    color: var(--muted);
+  }
+  .pick.on[data-o="1"] { background: var(--home); border-color: var(--home); color: #fff; }
+  .pick.on[data-o="0"] { background: var(--draw); border-color: var(--draw); color: #fff; }
+  .pick.on[data-o="2"] { background: var(--away); border-color: var(--away); color: #fff; }
+  .bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin-top: 4px; }
+  .bar span:nth-child(1) { background: var(--home); }
+  .bar span:nth-child(2) { background: var(--draw); }
+  .bar span:nth-child(3) { background: var(--away); }
+  .sumwarn { color: var(--warn); font-size: .75rem; }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .stat { background: var(--bg); border-radius: 10px; padding: 10px 12px; }
+  .stat .k { font-size: .8rem; color: var(--muted); }
+  .stat .v { font-size: 1.35rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .ticket { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 1.1rem; letter-spacing: .1em;
+    background: var(--accent-weak); padding: 10px 12px; border-radius: 8px; word-break: break-all; }
+  .note { color: var(--muted); font-size: .8rem; }
+  .lines { max-height: 260px; overflow: auto; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .85rem;
+    background: var(--bg); border-radius: 8px; padding: 8px 12px; white-space: pre; }
+
+  @media (max-width: 640px) {
+    thead, td.hide-sm { display: none; }
+    tbody tr {
+      display: grid; grid-template-columns: 1.6em repeat(6, minmax(0, 1fr)); gap: 6px;
+      padding: 10px 0; border-bottom: 1px solid var(--line);
+    }
+    tbody td { border: 0; padding: 0; text-align: left; }
+    tbody td:nth-child(1) { grid-column: 1; grid-row: 1; align-self: center; color: var(--muted); }
+    tbody td:nth-child(2) { grid-column: 2 / 5; grid-row: 1; }
+    tbody td:nth-child(4) { grid-column: 5 / 8; grid-row: 1; }
+    tbody td:nth-child(5) { grid-column: 2 / 4; grid-row: 2; }
+    tbody td:nth-child(6) { grid-column: 4 / 6; grid-row: 2; }
+    tbody td:nth-child(7) { grid-column: 6 / 8; grid-row: 2; }
+    tbody td:nth-child(8) { grid-column: 2 / 8; grid-row: 3; }
+    td.pct { display: flex; align-items: center; gap: 4px; }
+    td.pct::before { content: attr(data-l) "%"; color: var(--muted); font-size: .8rem; }
+    td.pct input { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚽ toto 予想ツール</h1>
+  <p>各試合の勝敗確率を入力すると、予算内で的中確率が最大になるようにダブル・トリプルを自動で割り当てます。</p>
+</header>
+<main>
+  <section class="card">
+    <h2>1. 設定</h2>
+    <div class="row">
+      <label>くじの種類
+        <select id="game">
+          <option value="13">toto（13試合）</option>
+          <option value="5">mini toto（5試合）</option>
+        </select>
+      </label>
+      <label>予算（円）
+        <input type="number" id="budget" min="100" step="100" value="1600">
+      </label>
+      <label>1口の金額（円）
+        <input type="number" id="unit" min="100" step="100" value="100">
+      </label>
+      <button id="btnOptimize" class="primary">最適化して予想</button>
+      <button id="btnRandom">確率ランダム（シングル）</button>
+      <button id="btnReset">リセット</button>
+    </div>
+    <details style="margin-top:12px">
+      <summary>対戦カードをまとめて貼り付け</summary>
+      <p class="note">1行に1試合。「ホーム - アウェイ」の形式。末尾に確率を付けることもできます（例: <code>浦和 - 鹿島 45 28 27</code>）。</p>
+      <textarea id="paste" placeholder="浦和 - 鹿島 45 28 27&#10;川崎F - 横浜FM&#10;..."></textarea>
+      <button id="btnPaste" style="margin-top:8px">反映</button>
+    </details>
+  </section>
+
+  <section class="card">
+    <h2>2. 試合と確率</h2>
+    <p class="note">確率は % で入力（合計が100でなくても自動で正規化します）。予想ボタン（1=ホーム勝ち / 0=引き分け / 2=アウェイ勝ち）は手動でも切り替えられます。</p>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th><th>ホーム</th><th class="hide-sm"></th><th>アウェイ</th>
+            <th>1 %</th><th>0 %</th><th>2 %</th><th>予想</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>3. 結果</h2>
+    <div class="stats">
+      <div class="stat"><div class="k">口数</div><div class="v" id="sLines">-</div></div>
+      <div class="stat"><div class="k">購入金額</div><div class="v" id="sCost">-</div></div>
+      <div class="stat"><div class="k">全的中確率</div><div class="v" id="sHit">-</div></div>
+      <div class="stat"><div class="k">1つ外れ以内の確率</div><div class="v" id="sHit1">-</div></div>
+      <div class="stat"><div class="k">ダブル / トリプル</div><div class="v" id="sDT">-</div></div>
+    </div>
+    <p class="note" style="margin-top:12px">マークシート表記</p>
+    <div class="ticket" id="ticket">-</div>
+    <div class="row" style="margin-top:12px">
+      <button id="btnCopy">表記をコピー</button>
+      <button id="btnLines">全組み合わせを表示</button>
+    </div>
+    <div id="linesWrap" style="display:none; margin-top:12px">
+      <div class="lines" id="lines"></div>
+    </div>
+    <p class="note" id="msg"></p>
+  </section>
+
+  <p class="note">※ 本ツールは入力された確率に基づく計算を行うだけで、的中を保証するものではありません。toto の購入は19歳以上に限られます。</p>
+</main>
+
+<script>
+(() => {
+  const OUT = ["1", "0", "2"];
+  const DEFAULT_P = [45, 27, 28];
+  const STORE_KEY = "toto-yosou-v1";
+  const $ = id => document.getElementById(id);
+
+  let state = load() || { game: 13, budget: 1600, unit: 100, matches: [] };
+
+  function blankMatch() {
+    return { home: "", away: "", p: DEFAULT_P.slice(), pick: [true, false, false] };
+  }
+  function ensureMatches() {
+    while (state.matches.length < state.game) state.matches.push(blankMatch());
+    state.matches.length = state.game;
+  }
+  function load() {
+    try { return JSON.parse(localStorage.getItem(STORE_KEY)); } catch { return null; }
+  }
+  function save() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch {}
+  }
+
+  // 正規化された確率 [p1, p0, p2]
+  function probs(m) {
+    const v = m.p.map(x => Math.max(0, Number(x) || 0));
+    const s = v[0] + v[1] + v[2];
+    return s > 0 ? v.map(x => x / s) : [1 / 3, 1 / 3, 1 / 3];
+  }
+
+  function render() {
+    $("game").value = String(state.game);
+    $("budget").value = state.budget;
+    $("unit").value = state.unit;
+    const tb = $("tbody");
+    tb.innerHTML = "";
+    state.matches.forEach((m, i) => {
+      const tr = document.createElement("tr");
+      const pr = probs(m);
+      const raw = m.p.reduce((a, b) => a + (Number(b) || 0), 0);
+      tr.innerHTML = `
+        <td>${i + 1}</td>
+        <td class="team"><input type="text" data-f="home" placeholder="ホーム" value="${esc(m.home)}"></td>
+        <td class="hide-sm">vs</td>
+        <td class="team"><input type="text" data-f="away" placeholder="アウェイ" value="${esc(m.away)}"></td>
+        ${[0, 1, 2].map(k => `<td class="pct" data-l="${OUT[k]}"><input type="number" min="0" max="100" data-p="${k}" value="${m.p[k]}"></td>`).join("")}
+        <td>
+          <div class="picks">${OUT.map((o, k) =>
+            `<button class="pick${m.pick[k] ? " on" : ""}" data-o="${o}" data-k="${k}" title="${(pr[k] * 100).toFixed(1)}%">${o}</button>`).join("")}</div>
+          <div class="bar">${pr.map(x => `<span style="width:${x * 100}%"></span>`).join("")}</div>
+          ${Math.round(raw) !== 100 ? `<div class="sumwarn">合計 ${raw}%</div>` : ""}
+        </td>`;
+      tr.querySelectorAll("input[data-f]").forEach(inp =>
+        inp.addEventListener("input", () => { m[inp.dataset.f] = inp.value; save(); }));
+      tr.querySelectorAll("input[data-p]").forEach(inp =>
+        inp.addEventListener("change", () => { m.p[+inp.dataset.p] = Number(inp.value) || 0; save(); render(); }));
+      tr.querySelectorAll(".pick").forEach(btn =>
+        btn.addEventListener("click", () => {
+          const k = +btn.dataset.k;
+          m.pick[k] = !m.pick[k];
+          if (!m.pick.some(Boolean)) m.pick[k] = true; // 最低1つは選択
+          save(); render();
+        }));
+      tb.appendChild(tr);
+    });
+    summarize();
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  // 選択中の予想が当たる確率（試合ごと）
+  function coverProb(m) {
+    const pr = probs(m);
+    return m.pick.reduce((s, on, k) => s + (on ? pr[k] : 0), 0);
+  }
+
+  function summarize() {
+    const counts = state.matches.map(m => m.pick.filter(Boolean).length);
+    const lines = counts.reduce((a, b) => a * b, 1);
+    const cost = lines * state.unit;
+    const q = state.matches.map(coverProb);
+    const hit = q.reduce((a, b) => a * b, 1);
+    // ちょうど k 試合外れる確率を DP で計算
+    let dp = [1];
+    q.forEach(x => {
+      const nd = new Array(dp.length + 1).fill(0);
+      dp.forEach((v, j) => { nd[j] += v * x; nd[j + 1] += v * (1 - x); });
+      dp = nd;
+    });
+    const hit1 = dp[0] + (dp[1] || 0);
+    const d = counts.filter(c => c === 2).length, t = counts.filter(c => c === 3).length;
+
+    $("sLines").textContent = lines.toLocaleString() + " 口";
+    $("sCost").textContent = cost.toLocaleString() + " 円";
+    $("sCost").style.color = cost > state.budget ? "var(--warn)" : "";
+    $("sHit").textContent = fmtP(hit);
+    $("sHit1").textContent = fmtP(hit1);
+    $("sDT").textContent = `${d} / ${t}`;
+    $("ticket").textContent = state.matches.map(m =>
+      m.pick.map((on, k) => on ? OUT[k] : "").join("")).map(s => s.length > 1 ? `[${s}]` : s).join(" ");
+    $("msg").textContent = cost > state.budget ? `予算を ${(cost - state.budget).toLocaleString()} 円オーバーしています。` : "";
+    if ($("linesWrap").style.display !== "none") showLines();
+  }
+
+  function fmtP(p) {
+    if (p >= 0.01) return (p * 100).toFixed(2) + "%";
+    if (p <= 0) return "0%";
+    return "1/" + Math.round(1 / p).toLocaleString();
+  }
+
+  // 予算内で全的中確率を最大化（口数 = 2^a × 3^b ごとの最良値を DP で厳密に求める）
+  function optimize() {
+    const maxLines = Math.floor(state.budget / state.unit);
+    if (maxLines < 1) { $("msg").textContent = "予算が1口分に足りません。"; return; }
+    const order = state.matches.map(m => {
+      const pr = probs(m);
+      return [0, 1, 2].sort((a, b) => pr[b] - pr[a]).map(k => ({ k, p: pr[k] }));
+    });
+    // dp: 口数 -> { lp: log(的中確率), levels: 各試合の選択数 }
+    let dp = new Map([[1, { lp: 0, levels: [] }]]);
+    order.forEach(o => {
+      const cum = [o[0].p, o[0].p + o[1].p, 1];
+      const nd = new Map();
+      dp.forEach((v, lines) => {
+        for (let lv = 1; lv <= 3; lv++) {
+          const nl = lines * lv;
+          if (nl > maxLines) break;
+          const lp = v.lp + Math.log(Math.max(cum[lv - 1], 1e-12));
+          const cur = nd.get(nl);
+          if (!cur || lp > cur.lp) nd.set(nl, { lp, levels: v.levels.concat(lv) });
+        }
+      });
+      dp = nd;
+    });
+    let best = null;
+    dp.forEach((v, lines) => {
+      if (!best || v.lp > best.lp + 1e-12 || (Math.abs(v.lp - best.lp) <= 1e-12 && lines < best.lines))
+        best = { ...v, lines };
+    });
+    state.matches.forEach((m, i) => {
+      m.pick = [false, false, false];
+      order[i].slice(0, best.levels[i]).forEach(o => { m.pick[o.k] = true; });
+    });
+    save(); render();
+  }
+
+  function randomPick() {
+    state.matches.forEach(m => {
+      const pr = probs(m);
+      let r = Math.random(), k = 0;
+      while (k < 2 && r >= pr[k]) { r -= pr[k]; k++; }
+      m.pick = [false, false, false];
+      m.pick[k] = true;
+    });
+    save(); render();
+  }
+
+  function showLines() {
+    const opts = state.matches.map(m => OUT.filter((_, k) => m.pick[k]));
+    const total = opts.reduce((a, o) => a * o.length, 1);
+    const LIMIT = 2000;
+    let out = [];
+    const rec = (i, acc) => {
+      if (out.length >= LIMIT) return;
+      if (i === opts.length) { out.push(acc.join(" ")); return; }
+      opts[i].forEach(o => rec(i + 1, acc.concat(o)));
+    };
+    rec(0, []);
+    $("lines").textContent = out.map((s, i) => String(i + 1).padStart(5) + ": " + s).join("\n") +
+      (total > LIMIT ? `\n…ほか ${(total - LIMIT).toLocaleString()} 口` : "");
+  }
+
+  function applyPaste() {
+    const rows = $("paste").value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    rows.slice(0, state.game).forEach((row, i) => {
+      const m = state.matches[i];
+      const nums = (row.match(/(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s*$/) || []);
+      let teams = nums.length ? row.slice(0, row.length - nums[0].length) : row;
+      const parts = teams.split(/\s*(?:-|－|ー|vs\.?|VS|対|×)\s*/).filter(Boolean);
+      m.home = (parts[0] || "").trim();
+      m.away = (parts[1] || "").trim();
+      if (nums.length) m.p = [Number(nums[1]), Number(nums[2]), Number(nums[3])];
+    });
+    save(); render();
+  }
+
+  $("game").addEventListener("change", e => { state.game = +e.target.value; ensureMatches(); save(); render(); });
+  $("budget").addEventListener("change", e => { state.budget = Math.max(0, +e.target.value || 0); save(); summarize(); });
+  $("unit").addEventListener("change", e => { state.unit = Math.max(1, +e.target.value || 100); save(); summarize(); });
+  $("btnOptimize").addEventListener("click", optimize);
+  $("btnRandom").addEventListener("click", randomPick);
+  $("btnPaste").addEventListener("click", applyPaste);
+  $("btnReset").addEventListener("click", () => {
+    if (!confirm("入力内容をすべてリセットしますか？")) return;
+    state = { game: state.game, budget: 1600, unit: 100, matches: [] };
+    ensureMatches(); save(); render();
+  });
+  $("btnCopy").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText($("ticket").textContent); $("msg").textContent = "コピーしました。"; }
+    catch { $("msg").textContent = "コピーできませんでした。"; }
+  });
+  $("btnLines").addEventListener("click", () => {
+    const w = $("linesWrap");
+    const show = w.style.display === "none";
+    w.style.display = show ? "" : "none";
+    $("btnLines").textContent = show ? "組み合わせを隠す" : "全組み合わせを表示";
+    if (show) showLines();
+  });
+
+  ensureMatches();
+  render();
+})();
+</script>
+</body>
+</html>
