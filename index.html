@@ -106,6 +106,10 @@
   label.chk { flex-direction: row; align-items: center; gap: 6px; align-self: end; padding-bottom: 6px; }
   .fx-adj input[type=number] { width: 5em; background: var(--card); }
   .fx-out { margin-top: 10px; font-size: .85rem; }
+  .draw { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .draw span { background: var(--card); border: 1px dashed var(--draw); border-radius: 999px; padding: 1px 8px; font-size: .78rem; }
+  .lv-高 { color: var(--warn); } .lv-中 { color: var(--text); } .lv-低 { color: var(--muted); }
+  .drawlist { margin: 6px 0 0; padding-left: 1.2em; font-size: .85rem; }
   .wgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-top: 12px; }
   .wgrid input { width: 100%; }
   .wgrid label.changed { color: var(--accent); }
@@ -192,6 +196,8 @@
         <li><b>調子</b>：直近の結果の勝点ペースと、ホームチームのホーム成績・アウェイチームのアウェイ成績。試合数が少ないうちは平均に寄せて効果を弱めます。</li>
         <li><b>コンディション</b>：移動距離（500kmごと）、中日数と前の試合の負担による疲労。主力の欠場は GK・DF が失点増、FW が得点減、MF がその両方に効きます。</li>
         <li><b>戦術・意欲</b>：スタイル同士の相性と戦術補正、試合の重要度（消化試合は下げ、優勝・残留争いは上げる）。</li>
+        <li><b>終盤（85分以降）</b>：消化試合数と85分以降の得点・失点の合計を入れると、終盤に点を取る力（自分の終盤得点と相手の終盤失点の平均）を比べます。終盤に点が動きやすいカードほど引き分けの確率を下げます。</li>
+        <li><b>引き分けの分析</b>：期待総得点の少なさ、力の拮抗、両チームの得点・失点の少なさ、終盤の点の動きやすさ、過去の対戦の引き分け率、天候から、引き分けになりやすい理由を表示します。</li>
         <li><b>試合環境</b>：ホームアドバンテージ（約1.13倍）、過去の対戦成績、天候・ピッチ（雨やピッチ不良は得点が減り、ポゼッションが不利・ロングボールが有利など）、審判の傾向。</li>
         <li>各要素の重みは「4. 過去の結果で重みを調整」で、記録した実際の結果に合わせて自動調整できます。</li>
       </ul>
@@ -218,6 +224,8 @@
       <div class="stat"><div class="k">1つ外れ以内の確率</div><div class="v" id="sHit1">-</div></div>
       <div class="stat"><div class="k">ダブル / トリプル</div><div class="v" id="sDT">-</div></div>
     </div>
+    <p class="note" style="margin-top:12px">引き分けの可能性が高い試合</p>
+    <ol class="drawlist" id="drawList"></ol>
     <p class="note" style="margin-top:12px">マークシート表記</p>
     <div class="ticket" id="ticket">-</div>
     <div class="row" style="margin-top:12px">
@@ -296,7 +304,8 @@
   }
 
   const FACTOR_KEYS = ["能力", "順位", "監督", "監督交代", "攻守", "調子", "会場別成績", "ホーム", "移動", "負担",
-    "欠場", "戦術", "重要度", "対戦成績", "天候", "審判", "引き分け"];
+    "欠場", "戦術", "重要度", "対戦成績", "天候", "審判", "終盤", "引き分け"];
+  const LATE_AVG = 0.17; // 85分以降の得点（1チーム1試合あたり）の目安
   const IMPORTANCE = [["低（消化試合）", -0.07], ["普通", 0], ["高（優勝・残留・昇格争い）", 0.04]];
   // t: 試合全体の得点の増減（log）、style: スタイルごとの有利不利
   const WEATHER = {
@@ -315,6 +324,7 @@
   function defaultWeights() { return Object.fromEntries(FACTOR_KEYS.map(k => [k, 1])); }
   function blankTeam(dist) {
     return { rating: 70, rank: 10, coach: 3, newCoach: false, gf: "", ga: "", form: "", venue: "",
+      played: "", lateGF: "", lateGA: "",
       dist, rest: 7, load: 0, inj: { gk: 0, df: 0, mf: 0, fw: 0 }, imp: 1, style: "" };
   }
   function blankFactors() {
@@ -423,6 +433,10 @@
     add("天候", (wx.style[H.style] || 0) - (wx.style[A.style] || 0), wx.t);
     add("審判", (rf.style[H.style] || 0) - (rf.style[A.style] || 0), rf.t);
 
+    // 終盤（85分以降）：自分の終盤得点と相手の終盤失点の平均を「終盤に点を取る力」とする
+    const late = lateRates(H, A);
+    add("終盤", 0.6 * (late.h - late.a));
+
     let R = 0, T = 0;
     const parts = {};
     Object.entries(P).forEach(([k, v]) => {
@@ -431,7 +445,9 @@
     });
     const lh = L * Math.exp((T + R) / 2), la = L * Math.exp((T - R) / 2);
     // 引き分けの上乗せ（引き分けが多いカードはさらに上げる）
-    const drawBoost = Math.pow(1.1 * (1 + 0.6 * (hd - 0.27 * n) / (n + 4)), W["引き分け"] ?? 1);
+    // 終盤に点が動きやすいカードは引き分けが崩れやすい
+    const drawBoost = Math.pow(1.1 * (1 + 0.6 * (hd - 0.27 * n) / (n + 4)), W["引き分け"] ?? 1)
+      * Math.pow(Math.exp(-0.8 * (late.h + late.a - 2 * LATE_AVG)), W["終盤"] ?? 1);
 
     const ph = [], pa = [];
     for (let i = 0, eh = Math.exp(-lh), ea = Math.exp(-la); i <= 10; i++) {
@@ -444,7 +460,45 @@
       if (v > best.p) best = { p: v, s: `${i}-${j}` };
     }
     const tot = w + d + a;
-    return { lh, la, score: best.s, parts, probs: [w / tot, d / tot, a / tot] };
+    return { lh, la, R, score: best.s, parts, late, probs: [w / tot, d / tot, a / tot] };
+  }
+
+  // 85分以降の得点・失点 → 1試合あたり（試合数が少ないうちは目安値に寄せる）
+  function lateRate(count, played) {
+    const c = Number(count), g = Number(played);
+    if (count === "" || played === "" || !(g > 0) || !(c >= 0)) return LATE_AVG;
+    return (c + LATE_AVG * 3) / (g + 3);
+  }
+  function lateRates(H, A) {
+    return {
+      h: (lateRate(H.lateGF, H.played) + lateRate(A.lateGA, A.played)) / 2,
+      a: (lateRate(A.lateGF, A.played) + lateRate(H.lateGA, H.played)) / 2,
+    };
+  }
+
+  // 引き分けになりやすさの分析（理由つき）
+  function drawAnalysis(f, r) {
+    const why = [], L = Number(state.leagueAvg) || 1.3;
+    const num = v => v === "" ? null : Number(v);
+    const total = r.lh + r.la;
+    if (total < 2 * L * 0.9) why.push(`期待総得点が ${total.toFixed(2)} と少ない`);
+    else if (total > 2 * L * 1.15) why.push(`期待総得点が ${total.toFixed(2)} と多く、引き分けにくい`);
+    if (Math.abs(r.R) < 0.12) why.push("力が拮抗している");
+    else if (Math.abs(r.R) > 0.5) why.push("力の差が大きく、引き分けにくい");
+    const gfH = num(f.h.gf), gfA = num(f.a.gf), gaH = num(f.h.ga), gaA = num(f.a.ga);
+    if (gfH != null && gfA != null && gfH < L * 0.9 && gfA < L * 0.9) why.push("両チームとも得点が少ない");
+    else if ((gfH != null && gfH < L * 0.85) || (gfA != null && gfA < L * 0.85)) why.push("片方の得点が少ない");
+    if (gaH != null && gaA != null && gaH < L * 0.85 && gaA < L * 0.85) why.push("両チームとも失点が少ない");
+    else if ((gaH != null && gaH < L * 0.8) || (gaA != null && gaA < L * 0.8)) why.push("片方の失点が少ない");
+    const lt = r.late.h + r.late.a;
+    if (lt > 2 * LATE_AVG * 1.25) why.push("85分以降に点が動きやすく、引き分けが崩れやすい");
+    else if (lt < 2 * LATE_AVG * 0.8) why.push("85分以降に点が動きにくい");
+    const { hw, d, aw } = f.h2h, n = hw + d + aw;
+    if (n >= 3 && d / n >= 0.4) why.push(`過去の対戦で引き分けが多い（${d}/${n}）`);
+    if (["雨", "強風", "ピッチ不良"].includes(f.weather)) why.push(`${f.weather}で得点が減りやすい`);
+    const p0 = r.probs[1];
+    const level = p0 >= 0.29 ? "高" : p0 >= 0.26 ? "中" : "低";
+    return { p0, level, why };
   }
 
   // ブックメーカーのオッズ（10進）→ 控除分を除いた確率
@@ -577,6 +631,7 @@
     tr.className = "factors";
     tr.hidden = !m.open;
     const r = finalProbs(m.f);
+    const da = drawAnalysis(m.f, r);
     const sign = x => (x >= 0 ? "+" : "−") + Math.abs(x).toFixed(2);
     const opt = (list, cur) => list.map(([v, l]) => `<option value="${esc(v)}"${String(cur) === String(v) ? " selected" : ""}>${esc(l)}</option>`).join("");
     const teamForm = (side, name) => {
@@ -591,6 +646,9 @@
         <label>順位${num("rank", t.rank, 'min="1" max="40"')}</label>
         <label>平均得点${num("gf", t.gf, 'min="0" step="0.1" placeholder="未入力"')}</label>
         <label>平均失点${num("ga", t.ga, 'min="0" step="0.1" placeholder="未入力"')}</label>
+        <label>消化試合数${num("played", t.played, 'min="0" placeholder="未入力"')}</label>
+        <label>85分以降の得点（合計）${num("lateGF", t.lateGF, 'min="0" placeholder="未入力"')}</label>
+        <label>85分以降の失点（合計）${num("lateGA", t.lateGA, 'min="0" placeholder="未入力"')}</label>
         <label>監督・コーチ${sel("coach", COACH.map((c, k) => [k + 1, `${k + 1}：${c}`]), t.coach)}</label>
         <label class="chk"><input type="checkbox" data-s="${side}" data-k="newCoach"${t.newCoach ? " checked" : ""}>監督交代から3試合以内</label>
         <div class="fx-h">調子</div>
@@ -640,6 +698,8 @@
         モデル 1: <b>${pc(r.probs[0])}</b>　0: <b>${pc(r.probs[1])}</b>　2: <b>${pc(r.probs[2])}</b>
         ${r.odds ? `／ オッズ 1: <b>${pc(r.odds[0])}</b>　0: <b>${pc(r.odds[1])}</b>　2: <b>${pc(r.odds[2])}</b>
         ／ 最終（反映度 ${Math.round(state.oddsW * 100)}%） 1: <b>${r.pct[0]}%</b>　0: <b>${r.pct[1]}%</b>　2: <b>${r.pct[2]}%</b>` : ""}
+        <div class="draw">引き分けの可能性：<b class="lv-${da.level}">${da.level}</b>（${pc(da.p0)}）
+          ${da.why.length ? da.why.map(w => `<span>${esc(w)}</span>`).join("") : `<span>目立つ要因なし</span>`}</div>
         <div class="contrib">${Object.entries(r.parts).filter(([k, v]) => k === "ホーム" || Math.abs(v) > 0.005).map(([k, v]) =>
           `<span class="${v > 0.005 ? "pos" : v < -0.005 ? "neg" : ""}">${k} ${sign(v)}</span>`).join("")}
           <span class="note">（＋はホーム有利、−はアウェイ有利）</span></div>
@@ -662,7 +722,7 @@
       const t = m.f[el.dataset.s], k = el.dataset.k;
       if (k.startsWith("inj.")) t.inj[k.slice(4)] = Number(el.value);
       else if (k === "newCoach") t[k] = el.checked;
-      else if (["style", "form", "venue", "gf", "ga"].includes(k)) t[k] = el.value;
+      else if (["style", "form", "venue", "gf", "ga", "played", "lateGF", "lateGA"].includes(k)) t[k] = el.value;
       else t[k] = Math.max(0, Number(el.value) || 0);
       update();
     }));
@@ -721,6 +781,17 @@
       m.pick.map((on, k) => on ? OUT[k] : "").join("")).map(s => s.length > 1 ? `[${s}]` : s).join(" ");
     $("msg").textContent = cost > state.budget ? `予算を ${(cost - state.budget).toLocaleString()} 円オーバーしています。` : "";
     if ($("linesWrap").style.display !== "none") showLines();
+    renderDrawList();
+  }
+
+  function renderDrawList() {
+    const list = state.matches.map((m, i) => {
+      const r = finalProbs(m.f);
+      return { i, m, p0: probs(m)[1], da: drawAnalysis(m.f, r) };
+    }).sort((a, b) => b.p0 - a.p0).slice(0, 4);
+    $("drawList").innerHTML = list.map(({ i, m, p0, da }) =>
+      `<li>${i + 1}. ${esc(m.home || "ホーム")} vs ${esc(m.away || "アウェイ")}：<b>${(p0 * 100).toFixed(0)}%</b>` +
+      (da.why.length ? `（${da.why.map(esc).join("、")}）` : "") + `</li>`).join("");
   }
 
   function fmtP(p) {
@@ -916,10 +987,10 @@
     ["東京V", "福岡", [20, 5, 11, -14], [18, 7, 11, -6], 1100, 3, "負負分", "負", 0, 0],
     ["神戸", "町田", [4, 22, 11, 7], [1, 26, 11, 20], 480, 3, "負", "勝勝勝", 0, 0],
     ["G大阪", "京都", [15, 10, 11, -7], [17, 9, 11, -8], 40, 3, "負負勝", "分", 0, 0],
-    ["名古屋", "横浜FM", [12, 13, 11, -4], [9, 17, 11, 4], 280, 4, "分", "分", 0, 1],
+    ["名古屋", "横浜FM", [12, 13, 11, -4], [9, 17, 11, 4], 280, 4, "分", "分分分", 0, 1],
     ["浦和", "長崎", [8, 18, 11, -3], [14, 12, 11, -3], 1000, 4, "勝勝", "勝", 0, 0],
     ["C大阪", "千葉", [13, 13, 11, -7], [19, 6, 11, -12], 520, 4, "分", "負", 0, 0],
-    ["FC東京", "水戸", [2, 24, 11, 13], [16, 9, 11, -4], 140, 4, "分", "負負負負負", 0, 0],
+    ["FC東京", "水戸", [2, 24, 11, 13], [16, 9, 11, -4], 140, 4, "勝勝勝勝勝分", "負負負負負", 0, 0],
     ["川崎F", "岡山", [7, 19, 11, 6], [10, 16, 11, -1], 650, 4, "勝", "勝", 0, 0],
     ["富山", "札幌", [3, 22, 12, 12], [14, 14, 12, -4], 900, 4, "勝", "勝勝", 0, 0],
     ["秋田", "今治", [17, 13, 12, -1], [19, 11, 12, -10], 1000, 4, "負負負", "負", 0, 0],
