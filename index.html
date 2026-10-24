@@ -1001,10 +1001,10 @@
   // スタイルは各クラブの一般的な戦い方からの目安
   const WEEK_EXTRA = {
     "広島": { weather: "雨", h: { gf: 25, ga: 10, style: "ハイプレス" } },
-    "鹿島": { h: { gf: 23, ga: 18 }, a: { gf: 22, ga: 17, style: "ポゼッション" } },
+    "鹿島": { h: { gf: 23, ga: 18 }, a: { gf: 22, ga: 17, style: "ポゼッション" }, h2h: { hw: 4, d: 0, aw: 0 } },
     "神戸": { weather: "雨", h: { gf: 18, ga: 11, style: "ハイプレス" }, a: { gf: 30, ga: 10, style: "ロングボール" } },
     "G大阪": { weather: "雨" },
-    "名古屋": { weather: "雨", h: { gf: 13, ga: 17 } },
+    "名古屋": { weather: "雨", h: { gf: 13, ga: 17 }, h2h: { hw: 3, d: 0, aw: 2 } },
     "浦和": { h: { gf: 20, ga: 23 } },
     "C大阪": { weather: "雨" },
     "FC東京": { h: { gf: 21, ga: 8 } },
@@ -1026,6 +1026,7 @@
       m.f.h.inj.fw = hfw; m.f.a.inj.mf = amf;
       const x = WEEK_EXTRA[home] || {}, g = hs[2];
       if (x.weather) m.f.weather = x.weather;
+      if (x.h2h) m.f.h2h = { ...x.h2h };
       // 総得点・総失点 → 1試合平均
       for (const [side, src] of [["h", x.h], ["a", x.a]]) {
         if (!src) continue;
@@ -1036,7 +1037,7 @@
     });
     state.matches.forEach(applyModel);
     optimize();
-    $("msg").textContent = "第1665回（10/24・25）の対象試合を、10/23時点の順位・勝点・得失点差・直近の結果・移動距離から入力しています。平均得点・失点（判明分）、天候予報、主なクラブの戦術スタイルも入れています。オッズ・対戦成績・会場別成績は見つからなかったため未入力です。";
+    $("msg").textContent = "第1665回（10/24・25）の対象試合を、10/23時点の順位・勝点・得失点差・直近の結果・移動距離から入力しています。平均得点・失点（判明分）、天候予報、主なクラブの戦術スタイルも入れています。過去の対戦成績は鹿島 vs 柏（直近4戦）と名古屋 vs 横浜FM（直近5戦）のみ。オッズ・会場別成績は見つからなかったため未入力です。";
   }
   $("btnSample").addEventListener("click", loadSample);
 
