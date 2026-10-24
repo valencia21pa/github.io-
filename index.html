@@ -912,8 +912,8 @@
   // [ホーム, アウェイ, ホーム[順位, 勝点, 試合数, 得失点差], アウェイ[...], 移動km, 中日数, ホーム直近, アウェイ直近, ホームFW欠場, アウェイMF欠場]
   const WEEK = [
     ["広島", "清水", [3, 23, 11, 15], [11, 14, 11, -6], 600, 3, "負", "負", 0, 0],
-    ["鹿島", "柏", [6, 20, 11, 4], [5, 22, 11, 5], 80, 3, "分", "分", 1, 0],
-    ["東京V", "福岡", [20, 5, 11, -14], [18, 7, 11, -9], 1100, 3, "負負分", "負", 0, 0],
+    ["鹿島", "柏", [6, 20, 11, 5], [5, 22, 11, 5], 80, 3, "分", "分", 1, 0],
+    ["東京V", "福岡", [20, 5, 11, -14], [18, 7, 11, -6], 1100, 3, "負負分", "負", 0, 0],
     ["神戸", "町田", [4, 22, 11, 7], [1, 26, 11, 20], 480, 3, "負", "勝勝勝", 0, 0],
     ["G大阪", "京都", [15, 10, 11, -7], [17, 9, 11, -8], 40, 3, "負負勝", "分", 0, 0],
     ["名古屋", "横浜FM", [12, 13, 11, -4], [9, 17, 11, 4], 280, 4, "分", "分", 0, 1],
@@ -925,21 +925,45 @@
     ["秋田", "今治", [17, 13, 12, -1], [19, 11, 12, -10], 1000, 4, "負負負", "負", 0, 0],
     ["鳥栖", "八戸", [12, 14, 12, -3], [15, 14, 12, -10], 1500, 4, "", "勝", 0, 0],
   ];
+  // 追加の要素（試合番号ごと）。平均得点・失点は判明したチームのみ、天候は 10/23〜24 発表の予報
+  // スタイルは各クラブの一般的な戦い方からの目安
+  const WEEK_EXTRA = {
+    0: { weather: "雨", h: { gf: 25, ga: 10, style: "ハイプレス" } },
+    1: { h: { gf: 23, ga: 18 }, a: { gf: 22, ga: 17, style: "ポゼッション" } },
+    3: { weather: "雨", h: { gf: 18, ga: 11, style: "ハイプレス" }, a: { gf: 30, ga: 10, style: "ロングボール" } },
+    4: { weather: "雨" },
+    5: { weather: "雨", h: { gf: 13, ga: 17 } },
+    6: { h: { gf: 20, ga: 23 } },
+    7: { weather: "雨" },
+    8: { h: { gf: 21, ga: 8 } },
+    9: { h: { gf: 23, ga: 17, style: "ポゼッション" }, a: { style: "堅守ブロック" } },
+    10: { h: { gf: 23, ga: 11 }, a: { gf: 15, ga: 19 } },
+    11: { h: { gf: 13, ga: 14 }, a: { gf: 15, ga: 25 } },
+    12: { weather: "雨", h: { gf: 12, ga: 15 }, a: { gf: 10, ga: 20 } },
+  };
   function loadSample() {
     // 勝点ペースと得失点差から基本能力を作り、試合数が少ないぶん平均 72 に寄せる
     const rating = ([, pts, g, gd]) => Math.round(72 + 0.6 * ((62 + 7 * pts / g + 3 * gd / g) - 72));
     state.game = 13;
-    state.matches = WEEK.map(([home, away, hs, as, dist, rest, hf, af, hfw, amf]) => {
+    state.matches = WEEK.map(([home, away, hs, as, dist, rest, hf, af, hfw, amf], i) => {
       const m = blankMatch();
       m.home = home; m.away = away;
       Object.assign(m.f.h, { rating: rating(hs), rank: hs[0], rest, form: hf });
       Object.assign(m.f.a, { rating: rating(as), rank: as[0], dist, rest, form: af });
       m.f.h.inj.fw = hfw; m.f.a.inj.mf = amf;
+      const x = WEEK_EXTRA[i] || {}, g = hs[2];
+      if (x.weather) m.f.weather = x.weather;
+      // 総得点・総失点 → 1試合平均
+      for (const [side, src] of [["h", x.h], ["a", x.a]]) {
+        if (!src) continue;
+        if (src.gf != null) { m.f[side].gf = String(+(src.gf / g).toFixed(2)); m.f[side].ga = String(+(src.ga / g).toFixed(2)); }
+        if (src.style) m.f[side].style = src.style;
+      }
       return m;
     });
     state.matches.forEach(applyModel);
     optimize();
-    $("msg").textContent = "第1665回（10/24・25）の対象試合を、10/23時点の順位・勝点・得失点差・直近の結果・移動距離から入力しています。戦術・対戦成績・オッズは未入力です。";
+    $("msg").textContent = "第1665回（10/24・25）の対象試合を、10/23時点の順位・勝点・得失点差・直近の結果・移動距離から入力しています。平均得点・失点（判明分）、天候予報、主なクラブの戦術スタイルも入れています。オッズ・対戦成績・会場別成績は見つからなかったため未入力です。";
   }
   $("btnSample").addEventListener("click", loadSample);
 
