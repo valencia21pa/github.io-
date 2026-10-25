@@ -106,6 +106,11 @@
   label.chk { flex-direction: row; align-items: center; gap: 6px; align-self: end; padding-bottom: 6px; }
   .fx-adj input[type=number] { width: 5em; background: var(--card); }
   .fx-out { margin-top: 10px; font-size: .85rem; }
+  .g3 { width: 100%; border-collapse: collapse; font-size: .88rem; }
+  .g3 th, .g3 td { padding: 5px 4px; border-bottom: 1px solid var(--line); text-align: center; }
+  .g3 td.t { text-align: left; font-weight: 600; }
+  .g3 td.best { background: var(--accent-weak); font-weight: 700; }
+  .g3 .v { color: var(--muted); font-size: .75rem; display: block; }
   .pat { display: flex; gap: 4px; }
   .pat input { width: 100%; min-width: 0; }
   .pattern { margin-top: 6px; font-size: .82rem; color: var(--muted); }
@@ -159,6 +164,7 @@
         <select id="game">
           <option value="13">toto（13試合）</option>
           <option value="5">mini toto（5試合）</option>
+          <option value="3">totoGOAL3（3試合・得点予想）</option>
         </select>
       </label>
       <label>予算（円）
@@ -178,7 +184,9 @@
       <button id="btnModelAll">全試合を要素から計算</button>
       <button id="btnOptimize" class="primary">最適化して予想</button>
       <button id="btnRandom">確率ランダム（シングル）</button>
-      <button id="btnSample">第1665回のデータを読み込む</button>
+      <button id="btnSample">第1665回を読み込む</button>
+      <button data-round="1666">第1666回 GOAL3を読み込む</button>
+      <button data-round="1668">第1668回を読み込む</button>
       <button id="btnReset">リセット</button>
     </div>
     <details style="margin-top:12px">
@@ -230,6 +238,7 @@
       <div class="stat"><div class="k">1つ外れ以内の確率</div><div class="v" id="sHit1">-</div></div>
       <div class="stat"><div class="k">ダブル / トリプル</div><div class="v" id="sDT">-</div></div>
     </div>
+    <div id="goal3" style="display:none; margin-top:12px"></div>
     <p class="note" style="margin-top:12px">引き分けの可能性が高い試合</p>
     <ol class="drawlist" id="drawList"></ol>
     <p class="note" style="margin-top:12px">マークシート表記</p>
@@ -750,6 +759,7 @@
         <label>実際の結果（試合後）<select data-m="result">${opt([["", "未入力"]].concat(OUT.map((o, k) => [k, o])), m.f.result)}</select></label>
       </div>
       <div class="fx-out">
+        ${m.vote && !m.vote.h ? `投票率 1: <b>${m.vote[0]}%</b>　0: <b>${m.vote[1]}%</b>　2: <b>${m.vote[2]}%</b><br>` : ""}
         期待得点 <b>${r.lh.toFixed(2)} − ${r.la.toFixed(2)}</b> ／ 最も可能性が高いスコア <b>${r.score}</b><br>
         モデル 1: <b>${pc(r.probs[0])}</b>　0: <b>${pc(r.probs[1])}</b>　2: <b>${pc(r.probs[2])}</b>
         ${r.odds ? `／ オッズ 1: <b>${pc(r.odds[0])}</b>　0: <b>${pc(r.odds[1])}</b>　2: <b>${pc(r.odds[2])}</b>
@@ -851,6 +861,33 @@
     $("msg").textContent = cost > state.budget ? `予算を ${(cost - state.budget).toLocaleString()} 円オーバーしています。` : "";
     if ($("linesWrap").style.display !== "none") showLines();
     renderDrawList();
+    renderGoal3();
+  }
+
+  // ポアソン分布から 0 / 1 / 2 / 3点以上 の確率
+  function goalDist(l) {
+    const p0 = Math.exp(-l), p1 = p0 * l, p2 = p1 * l / 2;
+    return [p0, p1, p2, Math.max(0, 1 - p0 - p1 - p2)];
+  }
+  function renderGoal3() {
+    const box = $("goal3");
+    if (state.game !== 3) { box.style.display = "none"; return; }
+    box.style.display = "";
+    const pc = x => (x * 100).toFixed(0) + "%";
+    const rows = [];
+    let combo = 1;
+    state.matches.forEach((m, i) => {
+      const r = finalProbs(m.f);
+      [["h", m.home || "ホーム", r.lh], ["a", m.away || "アウェイ", r.la]].forEach(([side, name, l]) => {
+        const d = goalDist(l), best = d.indexOf(Math.max(...d)), v = m.vote && m.vote[side];
+        combo *= d[best];
+        rows.push(`<tr><td class="t">${i + 1}. ${esc(name)}<span class="v">期待 ${l.toFixed(2)}点</span></td>` +
+          d.map((x, k) => `<td class="${k === best ? "best" : ""}">${pc(x)}${v ? `<span class="v">投票 ${v[k].toFixed(1)}%</span>` : ""}</td>`).join("") + `</tr>`);
+      });
+    });
+    box.innerHTML = `<p class="note">totoGOAL3：各チームの90分間の得点（0 / 1 / 2 / 3点以上）。色付きが最有力。下段は公式の投票率。</p>
+      <table class="g3"><thead><tr><th>チーム</th><th>0点</th><th>1点</th><th>2点</th><th>3点以上</th></tr></thead><tbody>${rows.join("")}</tbody></table>
+      <p class="note">最有力だけで買った場合（シングル1口）に6つすべて当たる確率：<b>${fmtP(combo)}</b></p>`;
   }
 
   function renderDrawList() {
@@ -1114,12 +1151,1265 @@
   }
   $("btnSample").addEventListener("click", loadSample);
 
+  // 公式サイト・Football LAB から取得した回ごとのデータ
+  const ROUNDS = {
+ "1666": {
+  "label": "第1666回 totoGOAL3（10/28 ルヴァン杯4回戦）",
+  "game": 3,
+  "kind": "goal3",
+  "note": "ルヴァンカップ1stラウンド4回戦（1発勝負、引き分けは延長→PK。GOAL3は90分の得点）。順位・得点・失点・直近5試合はJリーグ公式（10/25）、得点・失点パターンはFootball LAB（10/22）、投票率はtoto公式（10/25 17:31）。",
+  "matches": [
+   {
+    "home": "水戸",
+    "away": "C大阪",
+    "h": {
+     "rating": 69,
+     "rank": 17,
+     "gf": 1.09,
+     "ga": 1.45,
+     "form": "負負負負負",
+     "rest": 2,
+     "load": 1,
+     "played": 11,
+     "gp": {
+      "set": 3,
+      "cross": 1,
+      "combo": 2,
+      "counter": 0,
+      "dribble": 2,
+      "long": 0,
+      "mid": 4
+     },
+     "cp": {
+      "set": 4,
+      "cross": 3,
+      "combo": 6,
+      "counter": 0,
+      "dribble": 0,
+      "long": 0,
+      "mid": 3
+     }
+    },
+    "a": {
+     "rating": 70,
+     "rank": 12,
+     "gf": 1.0,
+     "ga": 1.58,
+     "form": "負分分負分",
+     "rest": 2,
+     "load": 1,
+     "played": 12,
+     "gp": {
+      "set": 1,
+      "cross": 0,
+      "combo": 3,
+      "counter": 0,
+      "dribble": 2,
+      "long": 1,
+      "mid": 3
+     },
+     "cp": {
+      "set": 1,
+      "cross": 4,
+      "combo": 6,
+      "counter": 0,
+      "dribble": 1,
+      "long": 0,
+      "mid": 5
+     },
+     "dist": 500
+    },
+    "weather": "良好",
+    "imp": 1,
+    "vote": {
+     "h": [
+      30.76,
+      36.0,
+      19.58,
+      13.66
+     ],
+     "a": [
+      20.0,
+      32.43,
+      29.83,
+      17.74
+     ]
+    },
+    "avg5": [
+     1.8,
+     1.6
+    ]
+   },
+   {
+    "home": "横浜FM",
+    "away": "広島",
+    "h": {
+     "rating": 73,
+     "rank": 9,
+     "gf": 1.33,
+     "ga": 1.0,
+     "form": "分勝分分分",
+     "rest": 2,
+     "load": 1,
+     "played": 12,
+     "gp": {
+      "set": 2,
+      "cross": 3,
+      "combo": 5,
+      "counter": 0,
+      "dribble": 0,
+      "long": 0,
+      "mid": 5
+     },
+     "cp": {
+      "set": 2,
+      "cross": 2,
+      "combo": 3,
+      "counter": 0,
+      "dribble": 0,
+      "long": 0,
+      "mid": 4
+     }
+    },
+    "a": {
+     "rating": 78,
+     "rank": 2,
+     "gf": 2.42,
+     "ga": 0.83,
+     "form": "勝勝勝負勝",
+     "rest": 3,
+     "load": 1,
+     "played": 12,
+     "gp": {
+      "set": 5,
+      "cross": 4,
+      "combo": 6,
+      "counter": 0,
+      "dribble": 2,
+      "long": 0,
+      "mid": 8
+     },
+     "cp": {
+      "set": 2,
+      "cross": 2,
+      "combo": 6,
+      "counter": 0,
+      "dribble": 0,
+      "long": 0,
+      "mid": 0
+     },
+     "dist": 650
+    },
+    "weather": "良好",
+    "imp": 1,
+    "vote": {
+     "h": [
+      24.66,
+      34.29,
+      25.88,
+      15.17
+     ],
+     "a": [
+      17.83,
+      29.42,
+      30.85,
+      21.9
+     ]
+    },
+    "avg5": [
+     1.2,
+     2.0
+    ]
+   },
+   {
+    "home": "名古屋",
+    "away": "浦和",
+    "h": {
+     "rating": 70,
+     "rank": 11,
+     "gf": 1.17,
+     "ga": 1.5,
+     "form": "負負勝勝分",
+     "rest": 2,
+     "load": 1,
+     "played": 12,
+     "gp": {
+      "set": 3,
+      "cross": 3,
+      "combo": 4,
+      "counter": 0,
+      "dribble": 0,
+      "long": 0,
+      "mid": 3
+     },
+     "cp": {
+      "set": 1,
+      "cross": 2,
+      "combo": 7,
+      "counter": 0,
+      "dribble": 3,
+      "long": 0,
+      "mid": 4
+     }
+    },
+    "a": {
+     "rating": 73,
+     "rank": 6,
+     "gf": 1.75,
+     "ga": 1.92,
+     "form": "負勝負勝勝",
+     "rest": 2,
+     "load": 1,
+     "played": 12,
+     "gp": {
+      "set": 6,
+      "cross": 8,
+      "combo": 2,
+      "counter": 0,
+      "dribble": 0,
+      "long": 0,
+      "mid": 4
+     },
+     "cp": {
+      "set": 3,
+      "cross": 7,
+      "combo": 7,
+      "counter": 0,
+      "dribble": 2,
+      "long": 0,
+      "mid": 4
+     },
+     "dist": 250
+    },
+    "weather": "良好",
+    "imp": 1,
+    "vote": {
+     "h": [
+      20.53,
+      32.46,
+      28.43,
+      18.58
+     ],
+     "a": [
+      21.52,
+      33.46,
+      27.65,
+      17.37
+     ]
+    },
+    "avg5": [
+     2.4,
+     2.2
+    ]
+   }
+  ]
+ },
+ "1668": {
+  "label": "第1668回 toto（10/31・11/1）",
+  "game": 13,
+  "kind": "toto",
+  "note": "対象試合・投票率・対戦成績はtoto公式（10/25 17:31）、順位・得点・失点・直近5試合はJリーグ公式（10/25）、得点・失点パターンはFootball LAB（10/22）。ルヴァン杯（10/28）とACL（10/27・28）に出るチームは中2〜3日・負担「中」または「高」としています。天候は未反映。",
+  "matches": [
+   {
+    "home": "岡山",
+    "away": "FC東京",
+    "h": {
+     "rating": 72,
+     "rank": 10,
+     "gf": 1.27,
+     "ga": 1.36,
+     "form": "勝負負負勝",
+     "rest": 6,
+     "load": 0,
+     "played": 11,
+     "gp": {
+      "set": 1,
+      "cross": 3,
+      "combo": 6,
+      "counter": 0,
+      "dribble": 0,
+      "long": 2,
+      "mid": 2
+     },
+     "cp": {
+      "set": 5,
+      "cross": 0,
+      "combo": 3,
+      "counter": 0,
+      "dribble": 2,
+      "long": 3,
+      "mid": 2
+     }
+    },
+    "a": {
+     "rating": 77,
+     "rank": 4,
+     "gf": 1.91,
+     "ga": 0.73,
+     "form": "勝勝勝勝分",
+     "rest": 6,
+     "load": 0,
+     "played": 11,
+     "gp": {
+      "set": 5,
+      "cross": 4,
+      "combo": 6,
+      "counter": 0,
+      "dribble": 1,
+      "long": 0,
+      "mid": 5
+     },
+     "cp": {
+      "set": 3,
+      "cross": 1,
+      "combo": 1,
+      "counter": 0,
+      "dribble": 0,
+      "long": 0,
+      "mid": 3
+     },
+     "dist": 500
+    },
+    "weather": "良好",
+    "imp": 1,
+    "vote": [
+     21.68,
+     18.93,
+     59.39
+    ],
+    "h2h": {
+     "hw": 1,
+     "d": 0,
+     "aw": 3
+    },
+    "date": "10/31"
+   },
+   {
+    "home": "水戸",
+    "away": "広島",
+    "h": {
+     "rating": 69,
+     "rank": 17,
+     "gf": 1.09,
+     "ga": 1.45,
+     "form": "負負負負負",
+     "rest": 2,
+     "load": 1,
+     "played": 11,
+     "gp": {
+      "set": 3,
+      "cross": 1,
+      "combo": 2,
+      "counter": 0,
+      "dribble": 2,
+      "long": 0,
+      "mid": 4
+     },
+     "cp": {
+      "set": 4,
+      "cross": 3,
+      "combo": 6,
+      "counter": 0,
+      "dribble": 0,
+      "long": 0,
+      "mid": 3
+     }
+    },
+    "a": {
+     "rating": 78,
+     "rank": 2,
+     "gf": 2.42,
+     "ga": 0.83,
+     "form": "勝勝勝負勝",
+     "rest": 2,
+     "load": 1,
+     "played": 12,
+     "gp": {
+      "set": 5,
+      "cross": 4,
+      "combo": 6,
+      "counter": 0,
+      "dribble": 2,
+      "long": 0,
+      "mid": 8
+     },
+     "cp": {
+      "set": 2,
+      "cross": 2,
+      "combo": 6,
+      "counter": 0,
+      "dribble": 0,
+      "long": 0,
+      "mid": 0
+     },
+     "dist": 750
+    },
+    "weather": "良好",
+    "imp": 1,
+    "vote": [
+     16.58,
+     17.96,
+     65.46
+    ],
+    "h2h": {
+     "hw": 0,
+     "d": 1,
+     "aw": 2
+    },
+    "date": "10/31"
+   },
+   {
+    "home": "神戸",
+    "away": "名古屋",
+    "h": {
+     "rating": 75,
+     "rank": 5,
+     "gf": 1.5,
+     "ga": 0.92,
+     "form": "勝負勝負分",
+     "rest": 3,
+     "load": 2,
+     "played": 12,
+     "gp": {
+      "set": 5,
+      "cross": 6,
+      "combo": 1,
+      "counter": 0,
+      "dribble": 0,
+      "long": 1,
+      "mid": 5
+     },
+     "cp": {
+      "set": 0,
+      "cross": 3,
+      "combo": 1,
+      "counter": 0,
+      "dribble": 3,
+      "long": 1,
+      "mid": 3
+     }
+    },
+    "a": {
+     "rating": 70,
+     "rank": 11,
+     "gf": 1.17,
+     "ga": 1.5,
+     "form": "負負勝勝分",
+     "rest": 2,
+     "load": 1,
+     "played": 12,
+     "gp": {
+      "set": 3,
+      "cross": 3,
+      "combo": 4,
+      "counter": 0,
+      "dribble": 0,
+      "long": 0,
+      "mid": 3
+     },
+     "cp": {
+      "set": 1,
+      "cross": 2,
+      "combo": 7,
+      "counter": 0,
+      "dribble": 3,
+      "long": 0,
+      "mid": 4
+     },
+     "dist": 200
+    },
+    "weather": "良好",
+    "imp": 1,
+    "vote": [
+     60.34,
+     19.29,
+     20.37
+    ],
+    "h2h": {
+     "hw": 3,
+     "d": 2,
+     "aw": 0
+    },
+    "date": "10/31"
+   },
+   {
+    "home": "鹿島",
+    "away": "C大阪",
+    "h": {
+     "rating": 74,
+     "rank": 7,
+     "gf": 2.08,
+     "ga": 1.75,
+     "form": "分勝勝分負",
+     "rest": 2,
+     "load": 2,
+     "played": 12,
+     "gp": {
+      "set": 7,
+      "cross": 5,
+      "combo": 6,
+      "counter": 0,
+      "dribble": 1,
+      "long": 0,
+      "mid": 4
+     },
+     "cp": {
+      "set": 3,
+      "cross": 5,
+      "combo": 3,
+      "counter": 0,
+      "dribble": 1,
+      "long": 1,
+      "mid": 5
+     }
+    },
+    "a": {
+     "rating": 70,
+     "rank": 12,
+     "gf": 1.0,
+     "ga": 1.58,
+     "form": "負分分負分",
+     "rest": 2,
+     "load": 1,
+     "played": 12,
+     "gp": {
+      "set": 1,
+      "cross": 0,
+      "combo": 3,
+      "counter": 0,
+      "dribble": 2,
+      "long": 1,
+      "mid": 3
+     },
+     "cp": {
+      "set": 1,
+      "cross": 4,
+      "combo": 6,
+      "counter": 0,
+      "dribble": 1,
+      "long": 0,
+      "mid": 5
+     },
+     "dist": 500
+    },
+    "weather": "良好",
+    "imp": 1,
+    "vote": [
+     66.06,
+     18.23,
+     15.71
+    ],
+    "h2h": {
+     "hw": 3,
+     "d": 1,
+     "aw": 1
+    },
+    "date": "10/31"
+   },
+   {
+    "home": "柏",
+    "away": "浦和",
+    "h": {
+     "rating": 76,
+     "rank": 3,
+     "gf": 2.08,
+     "ga": 1.58,
+     "form": "勝勝負分勝",
+     "rest": 3,
+     "load": 2,
+     "played": 12,
+     "gp": {
+      "set": 1,
+      "cross": 7,
+      "combo": 8,
+      "counter": 0,
+      "dribble": 3,
+      "long": 1,
+      "mid": 2
+     },
+     "cp": {
+      "set": 2,
+      "cross": 4,
+      "combo": 8,
+      "counter": 0,
+      "dribble": 0,
+      "long": 0,
+      "mid": 3
+     }
+    },
+    "a": {
+     "rating": 73,
+     "rank": 6,
+     "gf": 1.75,
+     "ga": 1.92,
+     "form": "負勝負勝勝",
+     "rest": 2,
+     "load": 1,
+     "played": 12,
+     "gp": {
+      "set": 6,
+      "cross": 8,
+      "combo": 2,
+      "counter": 0,
+      "dribble": 0,
+      "long": 0,
+      "mid": 4
+     },
+     "cp": {
+      "set": 3,
+      "cross": 7,
+      "combo": 7,
+      "counter": 0,
+      "dribble": 2,
+      "long": 0,
+      "mid": 4
+     },
+     "dist": 0
+    },
+    "weather": "良好",
+    "imp": 1,
+    "vote": [
+     50.66,
+     22.11,
+     27.23
+    ],
+    "h2h": {
+     "hw": 2,
+     "d": 1,
+     "aw": 2
+    },
+    "date": "10/31"
+   },
+   {
+    "home": "京都",
+    "away": "清水",
+    "h": {
+     "rating": 68,
+     "rank": 16,
+     "gf": 1.25,
+     "ga": 1.92,
+     "form": "勝負負分分",
+     "rest": 3,
+     "load": 2,
+     "played": 12,
+     "gp": {
+      "set": 1,
+      "cross": 2,
+      "combo": 9,
+      "counter": 0,
+      "dribble": 0,
+      "long": 0,
+      "mid": 1
+     },
+     "cp": {
+      "set": 4,
+      "cross": 5,
+      "combo": 1,
+      "counter": 0,
+      "dribble": 3,
+      "long": 0,
+      "mid": 8
+     }
+    },
+    "a": {
+     "rating": 69,
+     "rank": 13,
+     "gf": 0.83,
+     "ga": 1.67,
+     "form": "勝勝分負負",
+     "rest": 6,
+     "load": 0,
+     "played": 12,
+     "gp": {
+      "set": 2,
+      "cross": 2,
+      "combo": 4,
+      "counter": 0,
+      "dribble": 0,
+      "long": 0,
+      "mid": 2
+     },
+     "cp": {
+      "set": 3,
+      "cross": 2,
+      "combo": 6,
+      "counter": 0,
+      "dribble": 0,
+      "long": 1,
+      "mid": 4
+     },
+     "dist": 250
+    },
+    "weather": "良好",
+    "imp": 1,
+    "vote": [
+     34.62,
+     29.23,
+     36.15
+    ],
+    "h2h": {
+     "hw": 1,
+     "d": 1,
+     "aw": 3
+    },
+    "date": "10/31"
+   },
+   {
+    "home": "千葉",
+    "away": "福岡",
+    "h": {
+     "rating": 67,
+     "rank": 20,
+     "gf": 1.0,
+     "ga": 2.0,
+     "form": "分負分分負",
+     "rest": 7,
+     "load": 0,
+     "played": 12,
+     "gp": {
+      "set": 3,
+      "cross": 3,
+      "combo": 0,
+      "counter": 0,
+      "dribble": 0,
+      "long": 1,
+      "mid": 3
+     },
+     "cp": {
+      "set": 5,
+      "cross": 3,
+      "combo": 7,
+      "counter": 0,
+      "dribble": 2,
+      "long": 1,
+      "mid": 4
+     }
+    },
+    "a": {
+     "rating": 67,
+     "rank": 19,
+     "gf": 1.08,
+     "ga": 1.75,
+     "form": "負勝負負負",
+     "rest": 7,
+     "load": 0,
+     "played": 12,
+     "gp": {
+      "set": 3,
+      "cross": 1,
+      "combo": 1,
+      "counter": 0,
+      "dribble": 2,
+      "long": 0,
+      "mid": 5
+     },
+     "cp": {
+      "set": 4,
+      "cross": 6,
+      "combo": 4,
+      "counter": 0,
+      "dribble": 0,
+      "long": 0,
+      "mid": 4
+     },
+     "dist": 900
+    },
+    "weather": "良好",
+    "imp": 1,
+    "vote": [
+     38.03,
+     30.68,
+     31.29
+    ],
+    "h2h": {
+     "hw": 1,
+     "d": 2,
+     "aw": 2
+    },
+    "date": "11/01"
+   },
+   {
+    "home": "長崎",
+    "away": "東京V",
+    "h": {
+     "rating": 70,
+     "rank": 14,
+     "gf": 1.25,
+     "ga": 1.58,
+     "form": "勝分分負勝",
+     "rest": 7,
+     "load": 0,
+     "played": 12,
+     "gp": {
+      "set": 2,
+      "cross": 0,
+      "combo": 9,
+      "counter": 0,
+      "dribble": 2,
+      "long": 0,
+      "mid": 2
+     },
+     "cp": {
+      "set": 4,
+      "cross": 4,
+      "combo": 4,
+      "counter": 0,
+      "dribble": 1,
+      "long": 1,
+      "mid": 4
+     }
+    },
+    "a": {
+     "rating": 67,
+     "rank": 18,
+     "gf": 0.75,
+     "ga": 1.75,
+     "form": "負負負分勝",
+     "rest": 7,
+     "load": 0,
+     "played": 12,
+     "gp": {
+      "set": 1,
+      "cross": 2,
+      "combo": 2,
+      "counter": 0,
+      "dribble": 1,
+      "long": 0,
+      "mid": 0
+     },
+     "cp": {
+      "set": 3,
+      "cross": 3,
+      "combo": 6,
+      "counter": 0,
+      "dribble": 0,
+      "long": 0,
+      "mid": 8
+     },
+     "dist": 950
+    },
+    "weather": "良好",
+    "imp": 1,
+    "vote": [
+     51.96,
+     23.84,
+     24.2
+    ],
+    "h2h": {
+     "hw": 2,
+     "d": 1,
+     "aw": 2
+    },
+    "date": "11/01"
+   },
+   {
+    "home": "町田",
+    "away": "G大阪",
+    "h": {
+     "rating": 78,
+     "rank": 1,
+     "gf": 2.5,
+     "ga": 0.83,
+     "form": "負勝勝勝分",
+     "rest": 7,
+     "load": 0,
+     "played": 12,
+     "gp": {
+      "set": 8,
+      "cross": 7,
+      "combo": 5,
+      "counter": 0,
+      "dribble": 2,
+      "long": 0,
+      "mid": 8
+     },
+     "cp": {
+      "set": 3,
+      "cross": 2,
+      "combo": 2,
+      "counter": 0,
+      "dribble": 1,
+      "long": 1,
+      "mid": 1
+     }
+    },
+    "a": {
+     "rating": 69,
+     "rank": 15,
+     "gf": 1.17,
+     "ga": 1.75,
+     "form": "負負分勝分",
+     "rest": 3,
+     "load": 2,
+     "played": 12,
+     "gp": {
+      "set": 1,
+      "cross": 2,
+      "combo": 4,
+      "counter": 0,
+      "dribble": 1,
+      "long": 1,
+      "mid": 3
+     },
+     "cp": {
+      "set": 6,
+      "cross": 5,
+      "combo": 6,
+      "counter": 0,
+      "dribble": 1,
+      "long": 0,
+      "mid": 1
+     },
+     "dist": 350
+    },
+    "weather": "良好",
+    "imp": 1,
+    "vote": [
+     65.61,
+     17.27,
+     17.12
+    ],
+    "h2h": {
+     "hw": 3,
+     "d": 1,
+     "aw": 0
+    },
+    "date": "11/01"
+   },
+   {
+    "home": "横浜FM",
+    "away": "川崎F",
+    "h": {
+     "rating": 73,
+     "rank": 9,
+     "gf": 1.33,
+     "ga": 1.0,
+     "form": "分勝分分分",
+     "rest": 3,
+     "load": 1,
+     "played": 12,
+     "gp": {
+      "set": 2,
+      "cross": 3,
+      "combo": 5,
+      "counter": 0,
+      "dribble": 0,
+      "long": 0,
+      "mid": 5
+     },
+     "cp": {
+      "set": 2,
+      "cross": 2,
+      "combo": 3,
+      "counter": 0,
+      "dribble": 0,
+      "long": 0,
+      "mid": 4
+     }
+    },
+    "a": {
+     "rating": 74,
+     "rank": 8,
+     "gf": 2.09,
+     "ga": 1.55,
+     "form": "勝分負勝勝",
+     "rest": 3,
+     "load": 1,
+     "played": 11,
+     "gp": {
+      "set": 2,
+      "cross": 4,
+      "combo": 8,
+      "counter": 0,
+      "dribble": 1,
+      "long": 2,
+      "mid": 6
+     },
+     "cp": {
+      "set": 4,
+      "cross": 4,
+      "combo": 4,
+      "counter": 0,
+      "dribble": 0,
+      "long": 0,
+      "mid": 5
+     },
+     "dist": 0
+    },
+    "weather": "良好",
+    "imp": 1,
+    "vote": [
+     31.1,
+     29.62,
+     39.28
+    ],
+    "h2h": {
+     "hw": 2,
+     "d": 1,
+     "aw": 2
+    },
+    "date": "11/01"
+   },
+   {
+    "home": "仙台",
+    "away": "大宮",
+    "h": {
+     "rating": 76,
+     "rank": 1,
+     "gf": 1.69,
+     "ga": 0.85,
+     "form": "勝勝勝分勝",
+     "rest": 6,
+     "load": 0,
+     "played": 13,
+     "gp": {
+      "set": 5,
+      "cross": 3,
+      "combo": 8,
+      "counter": 0,
+      "dribble": 1,
+      "long": 0,
+      "mid": 4
+     },
+     "cp": {
+      "set": 5,
+      "cross": 1,
+      "combo": 0,
+      "counter": 0,
+      "dribble": 2,
+      "long": 1,
+      "mid": 0
+     }
+    },
+    "a": {
+     "rating": 74,
+     "rank": 5,
+     "gf": 1.77,
+     "ga": 1.23,
+     "form": "分勝負負分",
+     "rest": 6,
+     "load": 0,
+     "played": 13,
+     "gp": {
+      "set": 6,
+      "cross": 1,
+      "combo": 7,
+      "counter": 0,
+      "dribble": 2,
+      "long": 1,
+      "mid": 4
+     },
+     "cp": {
+      "set": 5,
+      "cross": 2,
+      "combo": 4,
+      "counter": 0,
+      "dribble": 2,
+      "long": 0,
+      "mid": 1
+     },
+     "dist": 300
+    },
+    "weather": "良好",
+    "imp": 1,
+    "vote": [
+     53.9,
+     21.37,
+     24.73
+    ],
+    "h2h": {
+     "hw": 1,
+     "d": 1,
+     "aw": 3
+    },
+    "date": "10/31"
+   },
+   {
+    "home": "新潟",
+    "away": "富山",
+    "h": {
+     "rating": 74,
+     "rank": 2,
+     "gf": 1.46,
+     "ga": 1.62,
+     "form": "分勝分負勝",
+     "rest": 6,
+     "load": 0,
+     "played": 13,
+     "gp": {
+      "set": 4,
+      "cross": 6,
+      "combo": 3,
+      "counter": 0,
+      "dribble": 1,
+      "long": 0,
+      "mid": 3
+     },
+     "cp": {
+      "set": 5,
+      "cross": 5,
+      "combo": 6,
+      "counter": 0,
+      "dribble": 0,
+      "long": 0,
+      "mid": 4
+     }
+    },
+    "a": {
+     "rating": 75,
+     "rank": 3,
+     "gf": 1.77,
+     "ga": 0.92,
+     "form": "分勝分分勝",
+     "rest": 6,
+     "load": 0,
+     "played": 13,
+     "gp": {
+      "set": 3,
+      "cross": 8,
+      "combo": 7,
+      "counter": 0,
+      "dribble": 2,
+      "long": 1,
+      "mid": 2
+     },
+     "cp": {
+      "set": 4,
+      "cross": 2,
+      "combo": 0,
+      "counter": 0,
+      "dribble": 1,
+      "long": 0,
+      "mid": 4
+     },
+     "dist": 200
+    },
+    "weather": "良好",
+    "imp": 1,
+    "vote": [
+     43.83,
+     25.93,
+     30.24
+    ],
+    "h2h": {
+     "hw": 0,
+     "d": 0,
+     "aw": 2
+    },
+    "date": "10/31"
+   },
+   {
+    "home": "宮崎",
+    "away": "大分",
+    "h": {
+     "rating": 73,
+     "rank": 6,
+     "gf": 1.46,
+     "ga": 1.23,
+     "form": "勝分分分勝",
+     "rest": 6,
+     "load": 0,
+     "played": 13,
+     "gp": {
+      "set": 3,
+      "cross": 2,
+      "combo": 3,
+      "counter": 0,
+      "dribble": 3,
+      "long": 1,
+      "mid": 5
+     },
+     "cp": {
+      "set": 4,
+      "cross": 3,
+      "combo": 6,
+      "counter": 0,
+      "dribble": 1,
+      "long": 1,
+      "mid": 1
+     }
+    },
+    "a": {
+     "rating": 73,
+     "rank": 7,
+     "gf": 1.31,
+     "ga": 0.77,
+     "form": "分勝勝勝分",
+     "rest": 6,
+     "load": 0,
+     "played": 13,
+     "gp": {
+      "set": 7,
+      "cross": 4,
+      "combo": 3,
+      "counter": 0,
+      "dribble": 1,
+      "long": 0,
+      "mid": 1
+     },
+     "cp": {
+      "set": 5,
+      "cross": 0,
+      "combo": 2,
+      "counter": 0,
+      "dribble": 0,
+      "long": 0,
+      "mid": 2
+     },
+     "dist": 150
+    },
+    "weather": "良好",
+    "imp": 1,
+    "vote": [
+     41.16,
+     27.85,
+     30.99
+    ],
+    "h2h": {
+     "hw": 2,
+     "d": 0,
+     "aw": 0
+    },
+    "date": "10/31"
+   }
+  ]
+ }
+};
+  function loadRound(id) {
+    const R = ROUNDS[id];
+    if (!R) return;
+    state.game = R.game;
+    state.sampleId = id;
+    state.matches = R.matches.map(x => {
+      const m = blankMatch();
+      m.home = x.home; m.away = x.away;
+      for (const side of ["h", "a"]) {
+        const src = x[side], t = m.f[side];
+        ["rating", "rank", "form", "rest", "load", "played"].forEach(k => { if (src[k] != null) t[k] = src[k]; });
+        if (src.gf != null) t.gf = String(src.gf);
+        if (src.ga != null) t.ga = String(src.ga);
+        if (src.dist != null) t.dist = src.dist;
+        if (src.gp) Object.assign(t.gp, src.gp);
+        if (src.cp) Object.assign(t.cp, src.cp);
+        t.imp = x.imp ?? 1;
+      }
+      if (x.weather) m.f.weather = x.weather;
+      if (x.h2h) m.f.h2h = { ...x.h2h };
+      if (x.vote) m.vote = x.vote;
+      return m;
+    });
+    state.matches.forEach(applyModel);
+    if (R.kind === "goal3") render(); else optimize();
+    $("msg").textContent = R.label + "：" + R.note;
+  }
+  document.querySelectorAll("[data-round]").forEach(b => b.addEventListener("click", () => loadRound(b.dataset.round)));
+
   ensureMatches();
   // 初回、または以前の版で自動表示したサンプルが残っていて、まだ結果の履歴もない場合は最新の対象試合に置き換える
-  if (!saved) loadSample();
-  else if (state.sampleId !== SAMPLE_ID && !state.history.length) {
-    loadSample();
-    $("msg").textContent = "以前のサンプルを第" + SAMPLE_ID + "回の対象試合（公式の試合番号順）に置き換えました。" + $("msg").textContent;
+  if (!saved) loadRound("1668");
+  else if (!["1665", "1666", "1668"].includes(state.sampleId) && !state.history.length) {
+    loadRound("1668");
+    $("msg").textContent = "以前のサンプルを最新の対象試合に置き換えました。" + $("msg").textContent;
   } else render();
 })();
 </script>
