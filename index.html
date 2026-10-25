@@ -106,6 +106,10 @@
   label.chk { flex-direction: row; align-items: center; gap: 6px; align-self: end; padding-bottom: 6px; }
   .fx-adj input[type=number] { width: 5em; background: var(--card); }
   .fx-out { margin-top: 10px; font-size: .85rem; }
+  .pat { display: flex; gap: 4px; }
+  .pat input { width: 100%; min-width: 0; }
+  .pattern { margin-top: 6px; font-size: .82rem; color: var(--muted); }
+  .pattern b { color: var(--text); }
   .draw { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .draw span { background: var(--card); border: 1px dashed var(--draw); border-radius: 999px; padding: 1px 8px; font-size: .78rem; }
   .lv-高 { color: var(--warn); } .lv-中 { color: var(--text); } .lv-低 { color: var(--muted); }
@@ -197,6 +201,7 @@
         <li><b>コンディション</b>：移動距離（500kmごと）、中日数と前の試合の負担による疲労。主力の欠場は GK・DF が失点増、FW が得点減、MF がその両方に効きます。</li>
         <li><b>戦術・意欲</b>：スタイル同士の相性と戦術補正、試合の重要度（消化試合は下げ、優勝・残留争いは上げる）。</li>
         <li><b>FW対DF</b>：主力FWのタイプ（裏抜け・スピード／ポスト・高さ／ドリブル・間受け）と相手CBのタイプ（大型・対人／スピード・カバー／ラインコントロール・ビルドアップ）の相性。裏抜けFWは大型CBや高いラインに強く、スピード型CBには抑えられやすい。ポスト型FWは大型CBに抑えられやすく、スピード型CBには強い。ドリブル型は大型CBに強く、ビルドアップ型（組織で守る）には抑えられやすい、としています。</li>
+        <li><b>パターン</b>：今季の得点・失点を、セットプレー／クロス／崩し／カウンター／ドリブル／ロングボール／ミドル・その他に分けて件数で入れると、自分がよく点を取る形と、相手がリーグ平均より多く失点している形が重なるほど有利と評価します（例：クロスからの得点が多いチーム × クロスからの失点が多い相手）。件数が少ないうちはリーグ平均に寄せます。</li>
         <li><b>終盤（85分以降）</b>：消化試合数と85分以降の得点・失点の合計を入れると、終盤に点を取る力（自分の終盤得点と相手の終盤失点の平均）を比べます。終盤に点が動きやすいカードほど引き分けの確率を下げます。</li>
         <li><b>引き分けの分析</b>：期待総得点の少なさ、力の拮抗、両チームの得点・失点の少なさ、終盤の点の動きやすさ、過去の対戦の引き分け率、天候から、引き分けになりやすい理由を表示します。</li>
         <li><b>試合環境</b>：ホームアドバンテージ（約1.13倍）、過去の対戦成績、天候・ピッチ（雨やピッチ不良は得点が減り、ポゼッションが不利・ロングボールが有利など）、審判の傾向。</li>
@@ -305,7 +310,32 @@
   }
 
   const FACTOR_KEYS = ["能力", "順位", "監督", "監督交代", "攻守", "調子", "会場別成績", "ホーム", "移動", "負担",
-    "欠場", "戦術", "FW対DF", "重要度", "対戦成績", "天候", "審判", "終盤", "引き分け"];
+    "欠場", "戦術", "FW対DF", "パターン", "重要度", "対戦成績", "天候", "審判", "終盤", "引き分け"];
+  // 得点・失点パターン（Football LAB などの分類をまとめたもの）と、リーグ平均のおおよその割合
+  const PATTERNS = [
+    ["set", "セットプレー", 0.30], ["cross", "クロス", 0.18], ["combo", "崩し（ショート・スルーパス）", 0.22],
+    ["counter", "カウンター", 0.10], ["dribble", "ドリブル", 0.07], ["long", "ロングボール", 0.07], ["mid", "ミドル・その他", 0.06],
+  ];
+  const blankPattern = () => Object.fromEntries(PATTERNS.map(([k]) => [k, ""]));
+  // 件数 → 割合。合計が少ないうちはリーグ平均に寄せる（+6件分）
+  function patternShares(obj) {
+    const n = PATTERNS.reduce((a, [k]) => a + (Number(obj[k]) || 0), 0);
+    if (!n) return null;
+    return Object.fromEntries(PATTERNS.map(([k, , avg]) => [k, ((Number(obj[k]) || 0) + 6 * avg) / (n + 6)]));
+  }
+  // 攻撃側の得点パターン × 守備側の失点パターン：守備側がリーグ平均より多く失点しているパターンで
+  // 攻撃側がよく得点しているほど大きい（0 が平均、+ は攻撃側に有利）
+  function patternMatch(att, def) {
+    const a = patternShares(att.gp), d = patternShares(def.cp);
+    if (!a || !d) return { v: 0, top: null };
+    let v = 0, top = null;
+    PATTERNS.forEach(([k, label, avg]) => {
+      const edge = a[k] * (d[k] - avg) / avg;
+      v += edge;
+      if (!top || edge > top.edge) top = { edge, label, a: a[k], d: d[k] };
+    });
+    return { v: Math.max(-0.5, Math.min(0.5, v)), top };
+  }
   const FW_TYPES = ["裏抜け・スピード", "ポスト・高さ", "ドリブル・間受け"];
   const CB_TYPES = ["大型・対人", "スピード・カバー", "ラインコントロール・ビルドアップ"];
   // FWのタイプ × 相手CBのタイプ：+ は攻撃側が有利、− は守備側が抑えやすい
@@ -334,7 +364,7 @@
   function defaultWeights() { return Object.fromEntries(FACTOR_KEYS.map(k => [k, 1])); }
   function blankTeam(dist) {
     return { rating: 70, rank: 10, coach: 3, newCoach: false, gf: "", ga: "", form: "", venue: "",
-      played: "", lateGF: "", lateGA: "", fwType: "", cbType: "",
+      played: "", lateGF: "", lateGA: "", fwType: "", cbType: "", gp: blankPattern(), cp: blankPattern(),
       dist, rest: 7, load: 0, inj: { gk: 0, df: 0, mf: 0, fw: 0 }, imp: 1, style: "" };
   }
   function blankFactors() {
@@ -347,6 +377,8 @@
   function fillTeam(t, dist) {
     t = Object.assign(blankTeam(dist), t);
     t.inj = Object.assign({ gk: 0, df: 0, mf: 0, fw: 0 }, t.inj);
+    t.gp = Object.assign(blankPattern(), t.gp);
+    t.cp = Object.assign(blankPattern(), t.cp);
     return t;
   }
   function fillFactors(f) {
@@ -447,6 +479,10 @@
     const mh = fwVsCb(H.fwType, A.cbType), ma = fwVsCb(A.fwType, H.cbType);
     add("FW対DF", 0.06 * (mh - ma), 0.03 * (mh + ma));
 
+    // 得点パターン × 相手の失点パターンの噛み合わせ
+    const ph_ = patternMatch(H, A), pa_ = patternMatch(A, H);
+    add("パターン", 0.35 * (ph_.v - pa_.v), 0.15 * (ph_.v + pa_.v));
+
     // 終盤（85分以降）：自分の終盤得点と相手の終盤失点の平均を「終盤に点を取る力」とする
     const late = lateRates(H, A);
     add("終盤", 0.6 * (late.h - late.a));
@@ -474,7 +510,7 @@
       if (v > best.p) best = { p: v, s: `${i}-${j}` };
     }
     const tot = w + d + a;
-    return { lh, la, R, score: best.s, parts, late, probs: [w / tot, d / tot, a / tot] };
+    return { lh, la, R, score: best.s, parts, late, pattern: { h: ph_, a: pa_ }, probs: [w / tot, d / tot, a / tot] };
   }
 
   // 85分以降の得点・失点 → 1試合あたり（試合数が少ないうちは目安値に寄せる）
@@ -680,6 +716,10 @@
         <label>戦術スタイル${sel("style", [["", "未設定"]].concat(STYLES.map(st => [st, st])), t.style)}</label>
         <label>主力FWのタイプ${sel("fwType", [["", "未設定"]].concat(FW_TYPES.map(x => [x, x])), t.fwType)}</label>
         <label>CBのタイプ${sel("cbType", [["", "未設定"]].concat(CB_TYPES.map(x => [x, x])), t.cbType)}</label>
+        <div class="fx-h">得点・失点パターン（今季の件数）</div>
+        ${PATTERNS.map(([k, label]) => `<label>${label}<span class="pat">
+          <input type="number" min="0" data-s="${side}" data-k="gp.${k}" value="${esc(t.gp[k])}" placeholder="得点" title="得点">
+          <input type="number" min="0" data-s="${side}" data-k="cp.${k}" value="${esc(t.cp[k])}" placeholder="失点" title="失点"></span></label>`).join("")}
         <label>試合の重要度${sel("imp", IMPORTANCE.map(([l], k) => [k, l]), t.imp)}</label>
       </fieldset>`;
     };
@@ -714,6 +754,7 @@
         モデル 1: <b>${pc(r.probs[0])}</b>　0: <b>${pc(r.probs[1])}</b>　2: <b>${pc(r.probs[2])}</b>
         ${r.odds ? `／ オッズ 1: <b>${pc(r.odds[0])}</b>　0: <b>${pc(r.odds[1])}</b>　2: <b>${pc(r.odds[2])}</b>
         ／ 最終（反映度 ${Math.round(state.oddsW * 100)}%） 1: <b>${r.pct[0]}%</b>　0: <b>${r.pct[1]}%</b>　2: <b>${r.pct[2]}%</b>` : ""}
+        ${patternText(m, r)}
         <div class="draw">引き分けの可能性：<b class="lv-${da.level}">${da.level}</b>（${pc(da.p0)}）
           ${da.why.length ? da.why.map(w => `<span>${esc(w)}</span>`).join("") : `<span>目立つ要因なし</span>`}</div>
         <div class="contrib">${Object.entries(r.parts).filter(([k, v]) => k === "ホーム" || Math.abs(v) > 0.005).map(([k, v]) =>
@@ -737,6 +778,7 @@
     tr.querySelectorAll("[data-s]").forEach(el => el.addEventListener("change", () => {
       const t = m.f[el.dataset.s], k = el.dataset.k;
       if (k.startsWith("inj.")) t.inj[k.slice(4)] = Number(el.value);
+      else if (k.startsWith("gp.") || k.startsWith("cp.")) t[k.slice(0, 2)][k.slice(3)] = el.value;
       else if (k === "newCoach") t[k] = el.checked;
       else if (["style", "fwType", "cbType", "form", "venue", "gf", "ga", "played", "lateGF", "lateGA"].includes(k)) t[k] = el.value;
       else t[k] = Math.max(0, Number(el.value) || 0);
@@ -744,6 +786,17 @@
     }));
     tr.querySelector("[data-adj]").addEventListener("change", e => { m.f.adj = Number(e.target.value); update(); });
     return tr;
+  }
+
+  function patternText(m, r) {
+    const line = (name, opp, pm) => {
+      if (!pm.top) return "";
+      const t = pm.top, pc = x => Math.round(x * 100) + "%";
+      return `<div>${esc(name)}の攻撃 × ${esc(opp)}の守備：<b>${pm.v >= 0 ? "+" : "−"}${Math.abs(pm.v).toFixed(2)}</b>` +
+        `（最も噛み合うのは <b>${t.label}</b>：${esc(name)}の得点の${pc(t.a)}、${esc(opp)}の失点の${pc(t.d)}）</div>`;
+    };
+    const h = line(m.home || "ホーム", m.away || "アウェイ", r.pattern.h), a = line(m.away || "アウェイ", m.home || "ホーム", r.pattern.a);
+    return h || a ? `<div class="pattern">${h}${a}</div>` : "";
   }
 
   function renderCalib() {
@@ -1050,6 +1103,8 @@
         if (src.style) m.f[side].style = src.style;
         if (src.fwType) m.f[side].fwType = src.fwType;
         if (src.cbType) m.f[side].cbType = src.cbType;
+        if (src.gp) Object.assign(m.f[side].gp, src.gp);
+        if (src.cp) Object.assign(m.f[side].cp, src.cp);
       }
       return m;
     });
