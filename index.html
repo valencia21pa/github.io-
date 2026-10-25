@@ -666,7 +666,7 @@
             `<button class="pick${m.pick[k] ? " on" : ""}" data-o="${o}" data-k="${k}" title="${(pr[k] * 100).toFixed(1)}%">${o}</button>`).join("")}</div>
           <div class="bar">${pr.map(x => `<span style="width:${x * 100}%"></span>`).join("")}</div>
           ${Math.round(raw) !== 100 ? `<div class="sumwarn">合計 ${raw}%</div>` : ""}
-          <button class="fxbtn${m.open ? " on" : ""}">⚙ 要素</button>
+          <button class="fxbtn${m.open ? " on" : ""}">⚙ 要素</button>${resultBadge(m)}
         </td>`;
       tr.querySelector(".fxbtn").addEventListener("click", () => { m.open = !m.open; save(); render(); });
       tr.querySelectorAll("input[data-f]").forEach(inp =>
@@ -684,6 +684,14 @@
       tb.appendChild(factorRow(m));
     });
     summarize();
+  }
+
+  // 履歴にある公式結果を表示（的中なら ○）
+  function resultBadge(m) {
+    const h = state.history.find(x => x.round === state.sampleId && x.home === m.home && x.away === m.away);
+    if (!h) return "";
+    const hit = m.pick[h.result];
+    return `<div class="note" style="margin-top:4px">結果 ${esc(h.score || "")}（${OUT[h.result]}）${hit ? "<b style=\"color:var(--accent)\">○</b>" : "<b style=\"color:var(--away)\">✕</b>"}</div>`;
   }
 
   function factorRow(m) {
@@ -1150,7 +1158,24 @@
     optimize();
     $("msg").textContent = "第1665回（10/24・25）の対象試合を、10/23時点の順位・勝点・得失点差・直近の結果・移動距離から入力しています。平均得点・失点（判明分）、天候予報、主なクラブの戦術スタイルも入れています。過去の対戦成績は鹿島 vs 柏（直近4戦）と名古屋 vs 横浜FM（直近5戦）のみ。オッズ・会場別成績は見つからなかったため未入力です。";
   }
-  $("btnSample").addEventListener("click", loadSample);
+  // 公式くじ結果（0=ホーム勝ち, 1=引き分け, 2=アウェイ勝ち）。読み込み時に履歴へ保存する（同じ回は重複させない）
+  const ROUND_RESULTS = {
+    "1665": { date: "2026-10-25", scores: ["4-0", "2-3", "0-0", "2-2", "6-0", "3-1", "2-2", "1-1", "2-1", "1-0", "1-0", "2-0", "0-1"],
+      results: [0, 2, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 2] },
+  };
+  function saveRoundToHistory(id) {
+    const R = ROUND_RESULTS[id];
+    if (!R || state.history.some(h => h.round === id)) return false;
+    state.matches.forEach((m, i) => {
+      const f = JSON.parse(JSON.stringify(m.f)); delete f.result;
+      state.history.push({ round: id, date: R.date, home: m.home, away: m.away, score: R.scores[i], f, result: R.results[i] });
+    });
+    return true;
+  }
+  $("btnSample").addEventListener("click", () => {
+    loadSample();
+    if (saveRoundToHistory("1665")) { save(); render(); $("msg").textContent += " 第1665回の公式結果を履歴に保存しました。"; }
+  });
 
   // 公式サイト・Football LAB から取得した回ごとのデータ
   const ROUNDS = {
@@ -2402,6 +2427,7 @@
     state.matches.forEach(applyModel);
     if (R.kind === "goal3") render(); else optimize();
     $("msg").textContent = R.label + "：" + R.note;
+    if (saveRoundToHistory(id)) { save(); render(); $("msg").textContent += " この回の公式結果を履歴に保存しました。"; }
   }
   document.querySelectorAll("[data-round]").forEach(b => b.addEventListener("click", () => loadRound(b.dataset.round)));
 
