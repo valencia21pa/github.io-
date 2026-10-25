@@ -174,7 +174,7 @@
         <input type="number" id="unit" min="100" step="100" value="100">
       </label>
       <label>リーグ平均得点（1チーム1試合）
-        <input type="number" id="leagueAvg" min="0.5" max="3" step="0.05" value="1.3">
+        <input type="number" id="leagueAvg" min="0.5" max="3" step="0.05" value="1.43">
       </label>
       <label>オッズの反映度（%）
         <input type="number" id="oddsW" min="0" max="100" step="10" value="50">
@@ -212,7 +212,7 @@
         <li><b>パターン</b>：今季の得点・失点を、セットプレー／クロス／崩し／カウンター／ドリブル／ロングボール／ミドル・その他に分けて件数で入れると、自分がよく点を取る形と、相手がリーグ平均より多く失点している形が重なるほど有利と評価します（例：クロスからの得点が多いチーム × クロスからの失点が多い相手）。件数が少ないうちはリーグ平均に寄せます。</li>
         <li><b>終盤（85分以降）</b>：消化試合数と85分以降の得点・失点の合計を入れると、終盤に点を取る力（自分の終盤得点と相手の終盤失点の平均）を比べます。終盤に点が動きやすいカードほど引き分けの確率を下げます。</li>
         <li><b>引き分けの分析</b>：期待総得点の少なさ、力の拮抗、両チームの得点・失点の少なさ、終盤の点の動きやすさ、過去の対戦の引き分け率、天候から、引き分けになりやすい理由を表示します。</li>
-        <li><b>試合環境</b>：ホームアドバンテージ（約1.13倍）、過去の対戦成績、天候・ピッチ（雨やピッチ不良は得点が減り、ポゼッションが不利・ロングボールが有利など）、審判の傾向。</li>
+        <li><b>試合環境</b>：ホームアドバンテージ（約1.07倍。今季のtoto対象195試合の実績＝ホーム勝ち44%・引き分け20%・アウェイ勝ち36%に合わせた値）、過去の対戦成績、天候・ピッチ（雨やピッチ不良は得点が減り、ポゼッションが不利・ロングボールが有利など）、審判の傾向。</li>
         <li>各要素の重みは「4. 過去の結果で重みを調整」で、記録した実際の結果に合わせて自動調整できます。</li>
       </ul>
     </details>
@@ -404,7 +404,7 @@
     state.matches.forEach(m => { m.f = fillFactors(m.f); });
     state.w = Object.assign(defaultWeights(), state.w);
     if (state.oddsW == null) state.oddsW = 0.5;
-    if (state.leagueAvg == null) state.leagueAvg = 1.3;
+    if (state.leagueAvg == null || state.leagueAvg === 1.3) state.leagueAvg = 1.43;
     if (!Array.isArray(state.history)) state.history = [];
   }
 
@@ -447,7 +447,7 @@
 
   // 要素から期待得点と 1/0/2 の確率を計算（W: 要素ごとの重み）
   function model(f, W = state.w) {
-    const L = Number(state.leagueAvg) || 1.3, H = f.h, A = f.a;
+    const L = Number(state.leagueAvg) || 1.43, H = f.h, A = f.a;
     const wx = WEATHER[f.weather] || WEATHER["良好"], rf = REFEREE[f.ref] || REFEREE["標準"];
     // r: log(ホーム期待得点 / アウェイ期待得点) への寄与（+ はホーム有利）、t: 両チーム合計の得点への寄与
     const P = {};
@@ -467,7 +467,8 @@
 
     add("調子", 0.08 * (shrink(parseForm(H.form), 1.4, 2) - shrink(parseForm(A.form), 1.4, 2)));
     add("会場別成績", 0.10 * ((shrink(parseRecord(H.venue), 1.6, 6) - 1.6) - (shrink(parseRecord(A.venue), 1.15, 6) - 1.15)));
-    add("ホーム", 0.12, 0.12);
+    // 今季のtoto対象195試合（第1644〜1664回）：ホーム勝ち44%・引き分け20%・アウェイ勝ち36%、平均得点ホーム1.48・アウェイ1.38
+    add("ホーム", 0.07, 0.07);
 
     const fh = fatigue(H, wx.heat), fa = fatigue(A, wx.heat);
     add("移動", fa.travel - fh.travel, -0.2 * (fh.travel + fa.travel));
@@ -505,7 +506,7 @@
     const lh = L * Math.exp((T + R) / 2), la = L * Math.exp((T - R) / 2);
     // 引き分けの上乗せ（引き分けが多いカードはさらに上げる）
     // 終盤に点が動きやすいカードは引き分けが崩れやすい
-    const drawBoost = Math.pow(1.1 * (1 + 0.6 * (hd - 0.27 * n) / (n + 4)), W["引き分け"] ?? 1)
+    const drawBoost = Math.pow(0.85 * (1 + 0.6 * (hd - 0.2 * n) / (n + 4)), W["引き分け"] ?? 1)
       * Math.pow(Math.exp(-0.8 * (late.h + late.a - 2 * LATE_AVG)), W["終盤"] ?? 1);
 
     const ph = [], pa = [];
@@ -987,7 +988,7 @@
   $("unit").addEventListener("change", e => { state.unit = Math.max(1, +e.target.value || 100); save(); summarize(); });
   $("btnOptimize").addEventListener("click", optimize);
   $("leagueAvg").addEventListener("change", e => {
-    state.leagueAvg = clamp(Number(e.target.value) || 1.3, 0.5, 3); state.matches.forEach(applyModel); save(); render();
+    state.leagueAvg = clamp(Number(e.target.value) || 1.43, 0.5, 3); state.matches.forEach(applyModel); save(); render();
   });
   $("oddsW").addEventListener("change", e => {
     state.oddsW = clamp((Number(e.target.value) || 0) / 100, 0, 1); state.matches.forEach(applyModel); save(); render();
