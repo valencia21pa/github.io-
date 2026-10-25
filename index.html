@@ -196,6 +196,7 @@
         <li><b>調子</b>：直近の結果の勝点ペースと、ホームチームのホーム成績・アウェイチームのアウェイ成績。試合数が少ないうちは平均に寄せて効果を弱めます。</li>
         <li><b>コンディション</b>：移動距離（500kmごと）、中日数と前の試合の負担による疲労。主力の欠場は GK・DF が失点増、FW が得点減、MF がその両方に効きます。</li>
         <li><b>戦術・意欲</b>：スタイル同士の相性と戦術補正、試合の重要度（消化試合は下げ、優勝・残留争いは上げる）。</li>
+        <li><b>FW対DF</b>：主力FWのタイプ（裏抜け・スピード／ポスト・高さ／ドリブル・間受け）と相手CBのタイプ（大型・対人／スピード・カバー／ラインコントロール・ビルドアップ）の相性。裏抜けFWは大型CBや高いラインに強く、スピード型CBには抑えられやすい。ポスト型FWは大型CBに抑えられやすく、スピード型CBには強い。ドリブル型は大型CBに強く、ビルドアップ型（組織で守る）には抑えられやすい、としています。</li>
         <li><b>終盤（85分以降）</b>：消化試合数と85分以降の得点・失点の合計を入れると、終盤に点を取る力（自分の終盤得点と相手の終盤失点の平均）を比べます。終盤に点が動きやすいカードほど引き分けの確率を下げます。</li>
         <li><b>引き分けの分析</b>：期待総得点の少なさ、力の拮抗、両チームの得点・失点の少なさ、終盤の点の動きやすさ、過去の対戦の引き分け率、天候から、引き分けになりやすい理由を表示します。</li>
         <li><b>試合環境</b>：ホームアドバンテージ（約1.13倍）、過去の対戦成績、天候・ピッチ（雨やピッチ不良は得点が減り、ポゼッションが不利・ロングボールが有利など）、審判の傾向。</li>
@@ -304,7 +305,16 @@
   }
 
   const FACTOR_KEYS = ["能力", "順位", "監督", "監督交代", "攻守", "調子", "会場別成績", "ホーム", "移動", "負担",
-    "欠場", "戦術", "重要度", "対戦成績", "天候", "審判", "終盤", "引き分け"];
+    "欠場", "戦術", "FW対DF", "重要度", "対戦成績", "天候", "審判", "終盤", "引き分け"];
+  const FW_TYPES = ["裏抜け・スピード", "ポスト・高さ", "ドリブル・間受け"];
+  const CB_TYPES = ["大型・対人", "スピード・カバー", "ラインコントロール・ビルドアップ"];
+  // FWのタイプ × 相手CBのタイプ：+ は攻撃側が有利、− は守備側が抑えやすい
+  const FW_VS_CB = {
+    "裏抜け・スピード":   { "大型・対人": 1, "スピード・カバー": -1, "ラインコントロール・ビルドアップ": 1 },
+    "ポスト・高さ":       { "大型・対人": -1, "スピード・カバー": 1, "ラインコントロール・ビルドアップ": 0 },
+    "ドリブル・間受け":   { "大型・対人": 1, "スピード・カバー": 0, "ラインコントロール・ビルドアップ": -1 },
+  };
+  function fwVsCb(fw, cb) { return fw && cb ? (FW_VS_CB[fw] || {})[cb] || 0 : 0; }
   const LATE_AVG = 0.17; // 85分以降の得点（1チーム1試合あたり）の目安
   const IMPORTANCE = [["低（消化試合）", -0.07], ["普通", 0], ["高（優勝・残留・昇格争い）", 0.04]];
   // t: 試合全体の得点の増減（log）、style: スタイルごとの有利不利
@@ -324,7 +334,7 @@
   function defaultWeights() { return Object.fromEntries(FACTOR_KEYS.map(k => [k, 1])); }
   function blankTeam(dist) {
     return { rating: 70, rank: 10, coach: 3, newCoach: false, gf: "", ga: "", form: "", venue: "",
-      played: "", lateGF: "", lateGA: "",
+      played: "", lateGF: "", lateGA: "", fwType: "", cbType: "",
       dist, rest: 7, load: 0, inj: { gk: 0, df: 0, mf: 0, fw: 0 }, imp: 1, style: "" };
   }
   function blankFactors() {
@@ -432,6 +442,10 @@
     add("対戦成績", 0.4 * (hw - aw) / (n + 4));
     add("天候", (wx.style[H.style] || 0) - (wx.style[A.style] || 0), wx.t);
     add("審判", (rf.style[H.style] || 0) - (rf.style[A.style] || 0), rf.t);
+
+    // 主力FWのタイプと相手CBのタイプの相性（例：裏抜けFW × 大型CB は攻撃側が有利）
+    const mh = fwVsCb(H.fwType, A.cbType), ma = fwVsCb(A.fwType, H.cbType);
+    add("FW対DF", 0.06 * (mh - ma), 0.03 * (mh + ma));
 
     // 終盤（85分以降）：自分の終盤得点と相手の終盤失点の平均を「終盤に点を取る力」とする
     const late = lateRates(H, A);
@@ -664,6 +678,8 @@
         <label>主力の欠場：FW${sel("inj.fw", cnt(5), t.inj.fw)}</label>
         <div class="fx-h">戦術・意欲</div>
         <label>戦術スタイル${sel("style", [["", "未設定"]].concat(STYLES.map(st => [st, st])), t.style)}</label>
+        <label>主力FWのタイプ${sel("fwType", [["", "未設定"]].concat(FW_TYPES.map(x => [x, x])), t.fwType)}</label>
+        <label>CBのタイプ${sel("cbType", [["", "未設定"]].concat(CB_TYPES.map(x => [x, x])), t.cbType)}</label>
         <label>試合の重要度${sel("imp", IMPORTANCE.map(([l], k) => [k, l]), t.imp)}</label>
       </fieldset>`;
     };
@@ -722,7 +738,7 @@
       const t = m.f[el.dataset.s], k = el.dataset.k;
       if (k.startsWith("inj.")) t.inj[k.slice(4)] = Number(el.value);
       else if (k === "newCoach") t[k] = el.checked;
-      else if (["style", "form", "venue", "gf", "ga", "played", "lateGF", "lateGA"].includes(k)) t[k] = el.value;
+      else if (["style", "fwType", "cbType", "form", "venue", "gf", "ga", "played", "lateGF", "lateGA"].includes(k)) t[k] = el.value;
       else t[k] = Math.max(0, Number(el.value) || 0);
       update();
     }));
@@ -1001,7 +1017,7 @@
   // スタイルは各クラブの一般的な戦い方からの目安
   const WEEK_EXTRA = {
     "広島": { weather: "雨", h: { gf: 25, ga: 10, style: "ハイプレス" } },
-    "鹿島": { weather: "雨", h: { gf: 23, ga: 18 }, a: { gf: 22, ga: 17, style: "ポゼッション" }, h2h: { hw: 4, d: 0, aw: 0 } },
+    "鹿島": { weather: "雨", h: { gf: 23, ga: 18, cbType: "大型・対人", fwType: "ポスト・高さ" }, a: { gf: 22, ga: 17, style: "ポゼッション", fwType: "裏抜け・スピード" }, h2h: { hw: 4, d: 0, aw: 0 } },
     "神戸": { weather: "雨", h: { gf: 18, ga: 11, style: "ハイプレス" }, a: { gf: 30, ga: 10, style: "ロングボール" } },
     "G大阪": { weather: "雨" },
     "名古屋": { weather: "雨", h: { gf: 13, ga: 17 }, h2h: { hw: 3, d: 0, aw: 2 } },
@@ -1032,6 +1048,8 @@
         if (!src) continue;
         if (src.gf != null) { m.f[side].gf = String(+(src.gf / g).toFixed(2)); m.f[side].ga = String(+(src.ga / g).toFixed(2)); }
         if (src.style) m.f[side].style = src.style;
+        if (src.fwType) m.f[side].fwType = src.fwType;
+        if (src.cbType) m.f[side].cbType = src.cbType;
       }
       return m;
     });
