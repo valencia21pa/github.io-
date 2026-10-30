@@ -212,6 +212,7 @@
         <li><b>パターン</b>：今季の得点・失点を、セットプレー／クロス／崩し／カウンター／ドリブル／ロングボール／ミドル・その他に分けて件数で入れると、自分がよく点を取る形と、相手がリーグ平均より多く失点している形が重なるほど有利と評価します（例：クロスからの得点が多いチーム × クロスからの失点が多い相手）。件数が少ないうちはリーグ平均に寄せます。</li>
         <li><b>終盤（85分以降）</b>：消化試合数と85分以降の得点・失点の合計を入れると、終盤に点を取る力（自分の終盤得点と相手の終盤失点の平均）を比べます。終盤に点が動きやすいカードほど引き分けの確率を下げます。</li>
         <li><b>引き分けの分析</b>：期待総得点の少なさ、力の拮抗、両チームの得点・失点の少なさ、終盤の点の動きやすさ、過去の対戦の引き分け率、天候から、引き分けになりやすい理由を表示します。</li>
+        <li><b>主審</b>：主審名を入れると、今季の担当試合でのホーム勝ち・引き分け・アウェイ勝ちの割合と平均総得点をリーグ平均（ホーム44%・引き分け26%・アウェイ30%、2.76点）と比べて反映します。試合数が少ない主審ほど効きを弱めます。</li>
         <li><b>試合環境</b>：ホームアドバンテージ（J1は約1.07倍、J2は約1.16倍。今季のtoto対象195試合の実績＝ホーム勝ち44%・引き分け20%・アウェイ勝ち36%に合わせた値）、過去の対戦成績、天候・ピッチ（雨やピッチ不良は得点が減り、ポゼッションが不利・ロングボールが有利など）、審判の傾向。</li>
         <li>各要素の重みは「4. 過去の結果で重みを調整」で、記録した実際の結果に合わせて自動調整できます。</li>
       </ul>
@@ -253,6 +254,7 @@
     <p class="note" id="msg"></p>
   </section>
 
+  <datalist id="refList"></datalist>
   <section class="card">
     <h2>4. 過去の結果で重みを調整</h2>
     <p class="note">試合が終わったら、各試合の「⚙ 要素」で実際の結果を選び、「結果を履歴に保存」を押します。履歴がたまったら「重みを自動調整」で、各要素の効き方（重み）を過去の結果に合うように調整します。少ない試合数で調整すると偶然に引っぱられるので、30試合以上を目安にしてください。重み 1 が初期値、0 はその要素を使わない、2 は2倍効かせるという意味です。</p>
@@ -364,6 +366,16 @@
     "酷暑": { t: -0.05, style: { "ハイプレス": -0.05 }, heat: 1.5 },
     "ピッチ不良": { t: -0.07, style: { "ポゼッション": -0.06, "ロングボール": 0.04 } },
   };
+  // 今季（2026/27 J1・J2、10/30時点 250試合）の主審別成績 [試合数, ホーム勝ち, 引き分け, アウェイ勝ち, 総得点]。Jリーグ公式記録から集計
+  const REFEREES = {"木村 博之": [9, 5, 1, 3, 33], "池内 明彦": [11, 8, 1, 2, 37], "山下 良美": [6, 3, 2, 1, 21], "須谷 雄三": [7, 2, 1, 4, 22], "上田 益也": [8, 3, 0, 5, 19], "笠原 寛貴": [8, 4, 3, 1, 22], "清水 勇人": [8, 6, 0, 2, 30], "福島 孝一郎": [10, 3, 4, 3, 23], "御厨 貴文": [9, 6, 1, 2, 26], "荒木 友輔": [3, 1, 2, 0, 7], "ハルム オスマース": [3, 1, 0, 2, 13], "飯田 淳平": [7, 3, 3, 1, 18], "フロリアン エクスナー": [3, 3, 0, 0, 10], "上村 篤史": [10, 2, 2, 6, 32], "中村 太": [9, 5, 3, 1, 24], "長峯 滉希": [6, 2, 2, 2, 17], "小屋 幸栄": [10, 5, 3, 2, 29], "大橋 侑祐": [9, 4, 3, 2, 22], "傅 明": [4, 2, 2, 0, 13], "谷本 涼": [3, 0, 1, 2, 4], "高崎 航地": [5, 1, 3, 1, 10], "セサル ラモス": [3, 2, 0, 1, 10], "先立 圭吾": [3, 1, 2, 0, 9], "中井 敏博": [6, 3, 2, 1, 14], "中川 愛斗": [7, 5, 2, 0, 21], "川俣 秀": [7, 3, 2, 2, 14], "瀬田 貴仁": [6, 2, 1, 3, 17], "吉田 哲朗": [9, 6, 1, 2, 19], "田邉 裕樹": [7, 2, 1, 4, 15], "堀 善仁": [7, 3, 1, 3, 13], "小林 拓矢": [7, 3, 2, 2, 18], "窪田 陽輔": [4, 2, 1, 1, 11], "上原 直人": [5, 2, 1, 2, 15], "俵 元希": [6, 0, 2, 4, 22], "野堀 桂佑": [4, 1, 2, 1, 10], "田中 玲匡": [7, 2, 3, 2, 23], "山岡 良介": [5, 1, 1, 3, 11], "井上 知大": [4, 1, 3, 0, 5]};
+  const REF_LEAGUE = { h: 0.44, d: 0.26, a: 0.30, goals: 2.76 };
+  function refereeStats(name) {
+    const k = String(name || "").replace(/\s+/g, "");
+    const key = Object.keys(REFEREES).find(n => n.replace(/\s+/g, "") === k);
+    if (!key) return null;
+    const [n, h, d, a, g] = REFEREES[key], s = n / (n + 10);
+    return { name: key, n, h: h / n, d: d / n, a: a / n, goals: g / n, s };
+  }
   const REFEREE = {
     "標準": { t: 0, style: {} },
     "笛が多い（PK・カード多め）": { t: 0.04, style: {} },
@@ -378,7 +390,7 @@
   }
   function blankFactors() {
     return { h: blankTeam(0), a: blankTeam(300), adj: 0, h2h: { hw: 0, d: 0, aw: 0 },
-      weather: "良好", ref: "標準", odds: ["", "", ""], result: "" };
+      weather: "良好", ref: "標準", refName: "", odds: ["", "", ""], result: "" };
   }
   function blankMatch() {
     return { home: "", away: "", p: DEFAULT_P.slice(), pick: [true, false, false], f: blankFactors(), open: false };
@@ -488,7 +500,10 @@
     const { hw, d: hd, aw } = f.h2h, n = hw + hd + aw;
     add("対戦成績", 0.4 * (hw - aw) / (n + 4));
     add("天候", (wx.style[H.style] || 0) - (wx.style[A.style] || 0), wx.t);
-    add("審判", (rf.style[H.style] || 0) - (rf.style[A.style] || 0), rf.t);
+    const rs = refereeStats(f.refName);
+    // 主審の今季成績：ホーム寄り/アウェイ寄り、得点の多さ（試合数が少ないうちは弱める）
+    add("審判", (rf.style[H.style] || 0) - (rf.style[A.style] || 0) + (rs ? 0.4 * rs.s * ((rs.h - rs.a) - (REF_LEAGUE.h - REF_LEAGUE.a)) : 0),
+      rf.t + (rs ? 0.5 * rs.s * Math.log(rs.goals / REF_LEAGUE.goals) : 0));
 
     // 主力FWのタイプと相手CBのタイプの相性（例：裏抜けFW × 大型CB は攻撃側が有利）
     const mh = fwVsCb(H.fwType, A.cbType), ma = fwVsCb(A.fwType, H.cbType);
@@ -511,7 +526,7 @@
     const lh = L * Math.exp((T + R) / 2), la = L * Math.exp((T - R) / 2);
     // 引き分けの上乗せ（引き分けが多いカードはさらに上げる）
     // 終盤に点が動きやすいカードは引き分けが崩れやすい
-    const drawBoost = Math.pow(0.85 * (1 + 0.6 * (hd - 0.2 * n) / (n + 4)), W["引き分け"] ?? 1)
+    const drawBoost = Math.pow(0.85 * (1 + 0.6 * (hd - 0.2 * n) / (n + 4)) * (rs ? 1 + 0.8 * rs.s * (rs.d - REF_LEAGUE.d) / REF_LEAGUE.d : 1), W["引き分け"] ?? 1)
       * Math.pow(Math.exp(-0.8 * (late.h + late.a - 2 * LATE_AVG)), W["終盤"] ?? 1);
 
     const ph = [], pa = [];
@@ -767,6 +782,8 @@
       <div class="fx-adj">
         <label>天候・ピッチ<select data-m="weather">${opt(Object.keys(WEATHER).map(k => [k, k]), m.f.weather)}</select></label>
         <label>審判の傾向<select data-m="ref">${opt(Object.keys(REFEREE).map(k => [k, k]), m.f.ref)}</select></label>
+        <label>主審名（今季成績を反映）<input type="text" data-m="refName" list="refList" value="${esc(m.f.refName)}" placeholder="例: 池内 明彦"></label>
+        ${(() => { const rs = refereeStats(m.f.refName); return rs ? `<span class="note">${esc(rs.name)}：${rs.n}試合 ホーム${Math.round(rs.h * 100)}% 分${Math.round(rs.d * 100)}% アウェイ${Math.round(rs.a * 100)}% 平均${rs.goals.toFixed(2)}点</span>` : m.f.refName ? `<span class="note">今季の担当記録なし</span>` : ""; })()}
       </div>
       <div class="fx-adj">
         <span class="note" style="align-self:center">ブックメーカーのオッズ（10進）</span>
@@ -798,6 +815,7 @@
     tr.querySelectorAll("[data-m]").forEach(el => el.addEventListener("change", () => {
       const k = el.dataset.m;
       m.f[k] = k === "result" ? (el.value === "" ? "" : Number(el.value)) : el.value;
+      if (k === "refName") { applyModel(m); save(); render(); return; }
       if (k === "result") { save(); return; }
       update();
     }));
@@ -2531,6 +2549,7 @@
   }
   document.querySelectorAll("[data-round]").forEach(b => b.addEventListener("click", () => loadRound(b.dataset.round)));
 
+  $("refList").innerHTML = Object.keys(REFEREES).map(n => `<option value="${esc(n)}">`).join("");
   ensureMatches();
   // 初回、または以前の版で自動表示したサンプルが残っていて、まだ結果の履歴もない場合は最新の対象試合に置き換える
   if (!saved) loadRound("1668");
