@@ -176,9 +176,6 @@
       <label>リーグ平均得点（1チーム1試合）
         <input type="number" id="leagueAvg" min="0.5" max="3" step="0.05" value="1.43">
       </label>
-      <label>オッズの反映度（%）
-        <input type="number" id="oddsW" min="0" max="100" step="10" value="50">
-      </label>
     </div>
     <div class="row" style="margin-top:12px">
       <button id="btnModelAll">全試合を要素から計算</button>
@@ -199,11 +196,11 @@
 
   <section class="card">
     <h2>2. 試合と確率</h2>
-    <p class="note">「⚙ 要素」を開いて、戦力・調子・コンディション・戦術・試合環境・オッズなどを入力すると、確率（%）が自動で計算されます。% を直接入力することもできます（合計が100でなくても自動で正規化します）。予想ボタン（1=ホーム勝ち / 0=引き分け / 2=アウェイ勝ち）は手動でも切り替えられます。</p>
+    <p class="note">「⚙ 要素」を開いて、戦力・調子・コンディション・戦術・試合環境などを入力すると、確率（%）が自動で計算されます。% を直接入力することもできます（合計が100でなくても自動で正規化します）。予想ボタン（1=ホーム勝ち / 0=引き分け / 2=アウェイ勝ち）は手動でも切り替えられます。</p>
     <details>
       <summary>計算モデルについて</summary>
       <ul class="note">
-        <li>各チームの期待得点を「リーグ平均得点」から出発し、下の要素で増減させます。そこからポアソン分布でスコアごとの確率を出し、1/0/2 に集計します（引き分けは実際の傾向に合わせて少し上乗せ）。オッズを入れた試合は、モデルの確率とオッズの確率を「オッズの反映度」の割合で混ぜます。</li>
+        <li>各チームの期待得点を「リーグ平均得点」から出発し、下の要素で増減させます。そこからポアソン分布でスコアごとの確率を出し、1/0/2 に集計します（引き分けは実際の傾向に合わせて少し上乗せ）。</li>
         <li><b>戦力</b>：基本能力（10ポイント差で期待得点比 約1.35倍）、順位（10位差で約1.16倍）、監督・コーチ（1段階差で約1.05倍）、監督交代から3試合以内（約1.05倍の上振れ）。平均得点・平均失点を入れると、攻撃力と守備力を分けて評価し、試合全体の得点の多さにも反映します。</li>
         <li><b>調子</b>：直近の結果の勝点ペースと、ホームチームのホーム成績・アウェイチームのアウェイ成績。試合数が少ないうちは平均に寄せて効果を弱めます。</li>
         <li><b>コンディション</b>：移動距離（500kmごと）、中日数と前の試合の負担による疲労。主力の欠場は GK・DF が失点増、FW が得点減、MF がその両方に効きます。</li>
@@ -390,7 +387,7 @@
   }
   function blankFactors() {
     return { h: blankTeam(0), a: blankTeam(300), adj: 0, h2h: { hw: 0, d: 0, aw: 0 },
-      weather: "良好", ref: "標準", refName: "", odds: ["", "", ""], result: "" };
+      weather: "良好", ref: "標準", refName: "", result: "" };
   }
   function blankMatch() {
     return { home: "", away: "", p: DEFAULT_P.slice(), pick: [true, false, false], f: blankFactors(), open: false };
@@ -415,7 +412,6 @@
     // 古い保存データに新しい項目を補う
     state.matches.forEach(m => { m.f = fillFactors(m.f); });
     state.w = Object.assign(defaultWeights(), state.w);
-    if (state.oddsW == null) state.oddsW = 0.5;
     if (state.leagueAvg == null || state.leagueAvg === 1.3) state.leagueAvg = 1.43;
     if (!Array.isArray(state.history)) state.history = [];
   }
@@ -581,19 +577,10 @@
     return { p0, level, why };
   }
 
-  // ブックメーカーのオッズ（10進）→ 控除分を除いた確率
-  function oddsProbs(f) {
-    const o = f.odds.map(Number);
-    if (o.some(x => !(x > 1))) return null;
-    const inv = o.map(x => 1 / x), s = inv[0] + inv[1] + inv[2];
-    return inv.map(x => x / s);
-  }
-
-  // モデルとオッズを混ぜた最終確率
+  // 最終確率（モデルのみ。ブックメーカーのオッズは使わない）
   function finalProbs(f) {
-    const r = model(f), op = oddsProbs(f), w = op ? clamp(state.oddsW, 0, 1) : 0;
-    const p = r.probs.map((x, k) => (1 - w) * x + w * (op ? op[k] : 0));
-    return { ...r, odds: op, final: p, pct: roundPct(p) };
+    const r = model(f);
+    return { ...r, final: r.probs, pct: roundPct(r.probs) };
   }
 
   // 合計がちょうど 100 になるように整数 % へ丸める
@@ -666,7 +653,6 @@
     $("budget").value = state.budget;
     $("unit").value = state.unit;
     $("leagueAvg").value = state.leagueAvg;
-    $("oddsW").value = Math.round(state.oddsW * 100);
     renderCalib();
     const tb = $("tbody");
     tb.innerHTML = "";
@@ -786,8 +772,6 @@
         ${(() => { const rs = refereeStats(m.f.refName); return rs ? `<span class="note">${esc(rs.name)}：${rs.n}試合 ホーム${Math.round(rs.h * 100)}% 分${Math.round(rs.d * 100)}% アウェイ${Math.round(rs.a * 100)}% 平均${rs.goals.toFixed(2)}点</span>` : m.f.refName ? `<span class="note">今季の担当記録なし</span>` : ""; })()}
       </div>
       <div class="fx-adj">
-        <span class="note" style="align-self:center">ブックメーカーのオッズ（10進）</span>
-        ${OUT.map((o, k) => `<label>${o}<input type="number" min="1" step="0.01" data-o="${k}" value="${esc(m.f.odds[k])}" placeholder="例: 2.10"></label>`).join("")}
         <label>実際の結果（試合後）<select data-m="result">${opt([["", "未入力"]].concat(OUT.map((o, k) => [k, o])), m.f.result)}</select></label>
       </div>
       <div class="fx-out">
@@ -795,8 +779,6 @@
         ${m.vote && !m.vote.h ? `投票率 1: <b>${m.vote[0]}%</b>　0: <b>${m.vote[1]}%</b>　2: <b>${m.vote[2]}%</b><br>` : ""}
         期待得点 <b>${r.lh.toFixed(2)} − ${r.la.toFixed(2)}</b> ／ 最も可能性が高いスコア <b>${r.score}</b><br>
         モデル 1: <b>${pc(r.probs[0])}</b>　0: <b>${pc(r.probs[1])}</b>　2: <b>${pc(r.probs[2])}</b>
-        ${r.odds ? `／ オッズ 1: <b>${pc(r.odds[0])}</b>　0: <b>${pc(r.odds[1])}</b>　2: <b>${pc(r.odds[2])}</b>
-        ／ 最終（反映度 ${Math.round(state.oddsW * 100)}%） 1: <b>${r.pct[0]}%</b>　0: <b>${r.pct[1]}%</b>　2: <b>${r.pct[2]}%</b>` : ""}
         ${patternText(m, r)}
         <div class="draw">引き分けの可能性：<b class="lv-${da.level}">${da.level}</b>（${pc(da.p0)}）
           ${da.why.length ? da.why.map(w => `<span>${esc(w)}</span>`).join("") : `<span>目立つ要因なし</span>`}</div>
@@ -808,9 +790,6 @@
     const update = () => { applyModel(m); save(); render(); };
     tr.querySelectorAll("[data-h]").forEach(el => el.addEventListener("change", () => {
       m.f.h2h[el.dataset.h] = Math.max(0, Math.floor(Number(el.value) || 0)); update();
-    }));
-    tr.querySelectorAll("[data-o]").forEach(el => el.addEventListener("change", () => {
-      m.f.odds[+el.dataset.o] = el.value; update();
     }));
     tr.querySelectorAll("[data-m]").forEach(el => el.addEventListener("change", () => {
       const k = el.dataset.m;
@@ -1023,9 +1002,6 @@
   $("leagueAvg").addEventListener("change", e => {
     state.leagueAvg = clamp(Number(e.target.value) || 1.43, 0.5, 3); state.matches.forEach(applyModel); save(); render();
   });
-  $("oddsW").addEventListener("change", e => {
-    state.oddsW = clamp((Number(e.target.value) || 0) / 100, 0, 1); state.matches.forEach(applyModel); save(); render();
-  });
   $("btnSaveHist").addEventListener("click", () => {
     const done = state.matches.filter(m => m.f.result !== "");
     if (!done.length) { $("calibMsg").textContent = "実際の結果が入力された試合がありません。各試合の「⚙ 要素」で結果を選んでください。"; return; }
@@ -1181,7 +1157,7 @@
     });
     state.matches.forEach(applyModel);
     optimize();
-    $("msg").textContent = "第1665回（10/24・25）の対象試合を、10/23時点の順位・勝点・得失点差・直近の結果・移動距離から入力しています。平均得点・失点（判明分）、天候予報、主なクラブの戦術スタイルも入れています。過去の対戦成績は鹿島 vs 柏（直近4戦）と名古屋 vs 横浜FM（直近5戦）のみ。オッズ・会場別成績は見つからなかったため未入力です。";
+    $("msg").textContent = "第1665回（10/24・25）の対象試合を、10/23時点の順位・勝点・得失点差・直近の結果・移動距離から入力しています。平均得点・失点（判明分）、天候予報、主なクラブの戦術スタイルも入れています。過去の対戦成績は鹿島 vs 柏（直近4戦）と名古屋 vs 横浜FM（直近5戦）のみ。会場別成績は未入力です。";
   }
   // 公式くじ結果（0=ホーム勝ち, 1=引き分け, 2=アウェイ勝ち）。読み込み時に履歴へ保存する（同じ回は重複させない）
   const ROUND_RESULTS = {
