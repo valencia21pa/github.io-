@@ -212,7 +212,7 @@
         <li><b>パターン</b>：今季の得点・失点を、セットプレー／クロス／崩し／カウンター／ドリブル／ロングボール／ミドル・その他に分けて件数で入れると、自分がよく点を取る形と、相手がリーグ平均より多く失点している形が重なるほど有利と評価します（例：クロスからの得点が多いチーム × クロスからの失点が多い相手）。件数が少ないうちはリーグ平均に寄せます。</li>
         <li><b>終盤（85分以降）</b>：消化試合数と85分以降の得点・失点の合計を入れると、終盤に点を取る力（自分の終盤得点と相手の終盤失点の平均）を比べます。終盤に点が動きやすいカードほど引き分けの確率を下げます。</li>
         <li><b>引き分けの分析</b>：期待総得点の少なさ、力の拮抗、両チームの得点・失点の少なさ、終盤の点の動きやすさ、過去の対戦の引き分け率、天候から、引き分けになりやすい理由を表示します。</li>
-        <li><b>試合環境</b>：ホームアドバンテージ（約1.07倍。今季のtoto対象195試合の実績＝ホーム勝ち44%・引き分け20%・アウェイ勝ち36%に合わせた値）、過去の対戦成績、天候・ピッチ（雨やピッチ不良は得点が減り、ポゼッションが不利・ロングボールが有利など）、審判の傾向。</li>
+        <li><b>試合環境</b>：ホームアドバンテージ（J1は約1.07倍、J2は約1.16倍。今季のtoto対象195試合の実績＝ホーム勝ち44%・引き分け20%・アウェイ勝ち36%に合わせた値）、過去の対戦成績、天候・ピッチ（雨やピッチ不良は得点が減り、ポゼッションが不利・ロングボールが有利など）、審判の傾向。</li>
         <li>各要素の重みは「4. 過去の結果で重みを調整」で、記録した実際の結果に合わせて自動調整できます。</li>
       </ul>
     </details>
@@ -373,7 +373,7 @@
   function defaultWeights() { return Object.fromEntries(FACTOR_KEYS.map(k => [k, 1])); }
   function blankTeam(dist) {
     return { rating: 70, rank: 10, coach: 3, newCoach: false, gf: "", ga: "", form: "", venue: "",
-      played: "", lateGF: "", lateGA: "", fwType: "", cbType: "", gp: blankPattern(), cp: blankPattern(),
+      played: "", lateGF: "", lateGA: "", fwType: "", cbType: "", gp: blankPattern(), cp: blankPattern(), league: "",
       dist, rest: 7, load: 0, inj: { gk: 0, df: 0, mf: 0, fw: 0 }, imp: 1, style: "" };
   }
   function blankFactors() {
@@ -453,14 +453,17 @@
     const P = {};
     const add = (k, r, t = 0) => { P[k] = { r, t }; };
 
-    add("能力", 0.03 * (H.rating - A.rating));
-    add("順位", 0.015 * (A.rank - H.rank));
+    // 平均得点・失点が両チーム分あるときは、強さの二重計上を避けるため能力・順位の効きを半分にする
+    const hasAD = [H, A].every(t => t.gf !== "" && t.ga !== "" && Number(t.gf) > 0);
+    const kAD = hasAD ? 0.5 : 1;
+    add("能力", kAD * 0.03 * (H.rating - A.rating));
+    add("順位", kAD * 0.015 * (A.rank - H.rank));
     add("監督", 0.05 * (H.coach - A.coach));
     add("監督交代", 0.05 * ((H.newCoach ? 1 : 0) - (A.newCoach ? 1 : 0)));
 
     const atkDef = t => ({
-      att: t.gf !== "" && Number(t.gf) > 0 ? 0.5 * Math.log(clamp(Number(t.gf), 0.2, 4) / L) : 0,
-      leak: t.ga !== "" && Number(t.ga) > 0 ? 0.5 * Math.log(clamp(Number(t.ga), 0.2, 4) / L) : 0,
+      att: t.gf !== "" && Number(t.gf) > 0 ? 0.35 * Math.log(clamp(Number(t.gf), 0.2, 4) / L) : 0,
+      leak: t.ga !== "" && Number(t.ga) > 0 ? 0.35 * Math.log(clamp(Number(t.ga), 0.2, 4) / L) : 0,
     });
     const ah = atkDef(H), aa = atkDef(A);
     add("攻守", (ah.att + aa.leak) - (aa.att + ah.leak), ah.att + aa.leak + aa.att + ah.leak);
@@ -468,7 +471,9 @@
     add("調子", 0.08 * (shrink(parseForm(H.form), 1.4, 2) - shrink(parseForm(A.form), 1.4, 2)));
     add("会場別成績", 0.10 * ((shrink(parseRecord(H.venue), 1.6, 6) - 1.6) - (shrink(parseRecord(A.venue), 1.15, 6) - 1.15)));
     // 今季のtoto対象195試合（第1644〜1664回）：ホーム勝ち44%・引き分け20%・アウェイ勝ち36%、平均得点ホーム1.48・アウェイ1.38
-    add("ホーム", 0.07, 0.07);
+    // J2 はホーム勝ちが多い（今季 J1 41% / J2 54%）
+    const homeAdv = H.league === "J2" ? 0.15 : 0.07;
+    add("ホーム", homeAdv, homeAdv);
 
     const fh = fatigue(H, wx.heat), fa = fatigue(A, wx.heat);
     add("移動", fa.travel - fh.travel, -0.2 * (fh.travel + fa.travel));
@@ -712,6 +717,7 @@
         <div class="fx-h">戦力</div>
         <label>基本能力（0〜100）${num("rating", t.rating, 'min="0" max="100"')}</label>
         <label>順位${num("rank", t.rank, 'min="1" max="40"')}</label>
+        <label>リーグ${sel("league", [["", "未設定"], ["J1", "J1"], ["J2", "J2"], ["J3", "J3"], ["その他", "その他"]], t.league)}</label>
         <label>平均得点${num("gf", t.gf, 'min="0" step="0.1" placeholder="未入力"')}</label>
         <label>平均失点${num("ga", t.ga, 'min="0" step="0.1" placeholder="未入力"')}</label>
         <label>消化試合数${num("played", t.played, 'min="0" placeholder="未入力"')}</label>
@@ -799,7 +805,7 @@
       if (k.startsWith("inj.")) t.inj[k.slice(4)] = Number(el.value);
       else if (k.startsWith("gp.") || k.startsWith("cp.")) t[k.slice(0, 2)][k.slice(3)] = el.value;
       else if (k === "newCoach") t[k] = el.checked;
-      else if (["style", "fwType", "cbType", "form", "venue", "gf", "ga", "played", "lateGF", "lateGA"].includes(k)) t[k] = el.value;
+      else if (["style", "fwType", "cbType", "form", "venue", "gf", "ga", "played", "lateGF", "lateGA", "league"].includes(k)) t[k] = el.value;
       else t[k] = Math.max(0, Number(el.value) || 0);
       update();
     }));
@@ -1160,12 +1166,13 @@
   }
   // 公式くじ結果（0=ホーム勝ち, 1=引き分け, 2=アウェイ勝ち）。読み込み時に履歴へ保存する（同じ回は重複させない）
   const ROUND_RESULTS = {
+    "1666": { date: "2026-10-28", goal3: true, scores: ["1-3", "4-3", "1-1"], results: [2, 0, 1] },
     "1665": { date: "2026-10-25", scores: ["4-0", "2-3", "0-0", "2-2", "6-0", "3-1", "2-2", "1-1", "2-1", "1-0", "1-0", "2-0", "0-1"],
       results: [0, 2, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 2] },
   };
   function saveRoundToHistory(id) {
     const R = ROUND_RESULTS[id];
-    if (!R || state.history.some(h => h.round === id)) return false;
+    if (!R || R.goal3 || state.history.some(h => h.round === id)) return false;
     state.matches.forEach((m, i) => {
       const f = JSON.parse(JSON.stringify(m.f)); delete f.result;
       state.history.push({ round: id, date: R.date, home: m.home, away: m.away, score: R.scores[i], f, result: R.results[i] });
@@ -1434,20 +1441,21 @@
   "label": "第1668回 toto（10/31・11/1）",
   "game": 13,
   "kind": "toto",
-  "note": "対象試合・投票率・対戦成績はtoto公式（10/25 17:31）、順位・得点・失点・直近5試合はJリーグ公式（10/25）、得点・失点パターンはFootball LAB（10/22）。ルヴァン杯（10/28）とACL（10/27・28）に出るチームは中2〜3日・負担「中」または「高」としています。天候は未反映。",
+  "note": "対象試合・投票率・対戦成績はtoto公式（10/30 15:09）、順位・得点・失点・直近5試合はJリーグ公式、得点・失点パターンはFootball LAB（10/26・27更新）。ルヴァン杯（10/28）とACL（10/27・28）に出たチームは中2〜3日で、延長・PKまで戦ったチームは負担「高」。",
   "matches": [
    {
     "home": "岡山",
     "away": "FC東京",
     "h": {
-     "rating": 72,
+     "rating": 71,
      "rank": 10,
-     "gf": 1.27,
-     "ga": 1.36,
-     "form": "勝負負負勝",
+     "gf": 1.25,
+     "ga": 1.42,
+     "form": "負負負勝負",
      "rest": 6,
      "load": 0,
-     "played": 11,
+     "played": 12,
+     "league": "J1",
      "gp": {
       "set": 1,
       "cross": 3,
@@ -1455,12 +1463,12 @@
       "counter": 0,
       "dribble": 0,
       "long": 2,
-      "mid": 2
+      "mid": 3
      },
      "cp": {
       "set": 5,
-      "cross": 0,
-      "combo": 3,
+      "cross": 1,
+      "combo": 4,
       "counter": 0,
       "dribble": 2,
       "long": 3,
@@ -1468,22 +1476,23 @@
      }
     },
     "a": {
-     "rating": 77,
-     "rank": 4,
-     "gf": 1.91,
-     "ga": 0.73,
-     "form": "勝勝勝勝分",
+     "rating": 78,
+     "rank": 2,
+     "gf": 2.25,
+     "ga": 0.67,
+     "form": "勝勝勝分勝",
      "rest": 6,
      "load": 0,
-     "played": 11,
+     "played": 12,
+     "league": "J1",
      "gp": {
-      "set": 5,
-      "cross": 4,
+      "set": 7,
+      "cross": 6,
       "combo": 6,
       "counter": 0,
-      "dribble": 1,
+      "dribble": 2,
       "long": 0,
-      "mid": 5
+      "mid": 6
      },
      "cp": {
       "set": 3,
@@ -1499,9 +1508,9 @@
     "weather": "良好",
     "imp": 1,
     "vote": [
-     21.68,
-     18.93,
-     59.39
+     14.61,
+     16.17,
+     69.22
     ],
     "h2h": {
      "hw": 1,
@@ -1514,14 +1523,15 @@
     "home": "水戸",
     "away": "広島",
     "h": {
-     "rating": 69,
+     "rating": 68,
      "rank": 17,
-     "gf": 1.09,
-     "ga": 1.45,
+     "gf": 1.0,
+     "ga": 1.83,
      "form": "負負負負負",
      "rest": 2,
      "load": 1,
-     "played": 11,
+     "played": 12,
+     "league": "J1",
      "gp": {
       "set": 3,
       "cross": 1,
@@ -1532,30 +1542,31 @@
       "mid": 4
      },
      "cp": {
-      "set": 4,
-      "cross": 3,
+      "set": 6,
+      "cross": 5,
       "combo": 6,
       "counter": 0,
-      "dribble": 0,
+      "dribble": 1,
       "long": 0,
-      "mid": 3
+      "mid": 4
      }
     },
     "a": {
      "rating": 78,
-     "rank": 2,
+     "rank": 3,
      "gf": 2.42,
      "ga": 0.83,
      "form": "勝勝勝負勝",
      "rest": 2,
      "load": 1,
      "played": 12,
+     "league": "J1",
      "gp": {
       "set": 5,
-      "cross": 4,
-      "combo": 6,
+      "cross": 5,
+      "combo": 8,
       "counter": 0,
-      "dribble": 2,
+      "dribble": 3,
       "long": 0,
       "mid": 8
      },
@@ -1573,9 +1584,9 @@
     "weather": "良好",
     "imp": 1,
     "vote": [
-     16.58,
-     17.96,
-     65.46
+     10.68,
+     12.19,
+     77.13
     ],
     "h2h": {
      "hw": 0,
@@ -1594,8 +1605,9 @@
      "ga": 0.92,
      "form": "勝負勝負分",
      "rest": 3,
-     "load": 2,
+     "load": 1,
      "played": 12,
+     "league": "J1",
      "gp": {
       "set": 5,
       "cross": 6,
@@ -1620,12 +1632,13 @@
      "rank": 11,
      "gf": 1.17,
      "ga": 1.5,
-     "form": "負負勝勝分",
+     "form": "負勝勝分分",
      "rest": 2,
-     "load": 1,
+     "load": 2,
      "played": 12,
+     "league": "J1",
      "gp": {
-      "set": 3,
+      "set": 4,
       "cross": 3,
       "combo": 4,
       "counter": 0,
@@ -1636,7 +1649,7 @@
      "cp": {
       "set": 1,
       "cross": 2,
-      "combo": 7,
+      "combo": 8,
       "counter": 0,
       "dribble": 3,
       "long": 0,
@@ -1647,9 +1660,9 @@
     "weather": "良好",
     "imp": 1,
     "vote": [
-     60.34,
-     19.29,
-     20.37
+     65.57,
+     19.42,
+     15.01
     ],
     "h2h": {
      "hw": 3,
@@ -1663,19 +1676,20 @@
     "away": "C大阪",
     "h": {
      "rating": 74,
-     "rank": 7,
+     "rank": 8,
      "gf": 2.08,
      "ga": 1.75,
      "form": "分勝勝分負",
      "rest": 2,
-     "load": 2,
+     "load": 1,
      "played": 12,
+     "league": "J1",
      "gp": {
       "set": 7,
-      "cross": 5,
+      "cross": 6,
       "combo": 6,
       "counter": 0,
-      "dribble": 1,
+      "dribble": 2,
       "long": 0,
       "mid": 4
      },
@@ -1684,7 +1698,7 @@
       "cross": 5,
       "combo": 3,
       "counter": 0,
-      "dribble": 1,
+      "dribble": 4,
       "long": 1,
       "mid": 5
      }
@@ -1694,25 +1708,26 @@
      "rank": 12,
      "gf": 1.0,
      "ga": 1.58,
-     "form": "負分分負分",
+     "form": "分分負分分",
      "rest": 2,
      "load": 1,
      "played": 12,
+     "league": "J1",
      "gp": {
-      "set": 1,
+      "set": 2,
       "cross": 0,
       "combo": 3,
       "counter": 0,
-      "dribble": 2,
+      "dribble": 3,
       "long": 1,
       "mid": 3
      },
      "cp": {
       "set": 1,
       "cross": 4,
-      "combo": 6,
+      "combo": 7,
       "counter": 0,
-      "dribble": 1,
+      "dribble": 2,
       "long": 0,
       "mid": 5
      },
@@ -1721,9 +1736,9 @@
     "weather": "良好",
     "imp": 1,
     "vote": [
-     66.06,
-     18.23,
-     15.71
+     68.51,
+     18.16,
+     13.33
     ],
     "h2h": {
      "hw": 3,
@@ -1737,45 +1752,47 @@
     "away": "浦和",
     "h": {
      "rating": 76,
-     "rank": 3,
+     "rank": 4,
      "gf": 2.08,
      "ga": 1.58,
      "form": "勝勝負分勝",
      "rest": 3,
      "load": 2,
      "played": 12,
+     "league": "J1",
      "gp": {
       "set": 1,
       "cross": 7,
       "combo": 8,
       "counter": 0,
-      "dribble": 3,
+      "dribble": 6,
       "long": 1,
       "mid": 2
      },
      "cp": {
       "set": 2,
-      "cross": 4,
+      "cross": 5,
       "combo": 8,
       "counter": 0,
-      "dribble": 0,
+      "dribble": 1,
       "long": 0,
       "mid": 3
      }
     },
     "a": {
      "rating": 73,
-     "rank": 6,
+     "rank": 7,
      "gf": 1.75,
      "ga": 1.92,
-     "form": "負勝負勝勝",
+     "form": "勝負勝勝勝",
      "rest": 2,
-     "load": 1,
+     "load": 2,
      "played": 12,
+     "league": "J1",
      "gp": {
       "set": 6,
       "cross": 8,
-      "combo": 2,
+      "combo": 3,
       "counter": 0,
       "dribble": 0,
       "long": 0,
@@ -1795,9 +1812,9 @@
     "weather": "良好",
     "imp": 1,
     "vote": [
-     50.66,
-     22.11,
-     27.23
+     53.16,
+     21.62,
+     25.22
     ],
     "h2h": {
      "hw": 2,
@@ -1816,19 +1833,20 @@
      "ga": 1.92,
      "form": "勝負負分分",
      "rest": 3,
-     "load": 2,
+     "load": 1,
      "played": 12,
+     "league": "J1",
      "gp": {
       "set": 1,
       "cross": 2,
       "combo": 9,
       "counter": 0,
       "dribble": 0,
-      "long": 0,
-      "mid": 1
+      "long": 1,
+      "mid": 2
      },
      "cp": {
-      "set": 4,
+      "set": 6,
       "cross": 5,
       "combo": 1,
       "counter": 0,
@@ -1846,6 +1864,7 @@
      "rest": 6,
      "load": 0,
      "played": 12,
+     "league": "J1",
      "gp": {
       "set": 2,
       "cross": 2,
@@ -1857,10 +1876,10 @@
      },
      "cp": {
       "set": 3,
-      "cross": 2,
-      "combo": 6,
+      "cross": 3,
+      "combo": 8,
       "counter": 0,
-      "dribble": 0,
+      "dribble": 1,
       "long": 1,
       "mid": 4
      },
@@ -1869,9 +1888,9 @@
     "weather": "良好",
     "imp": 1,
     "vote": [
-     34.62,
-     29.23,
-     36.15
+     40.25,
+     27.93,
+     31.82
     ],
     "h2h": {
      "hw": 1,
@@ -1888,25 +1907,26 @@
      "rank": 20,
      "gf": 1.0,
      "ga": 2.0,
-     "form": "分負分分負",
+     "form": "負分分負分",
      "rest": 7,
      "load": 0,
      "played": 12,
+     "league": "J1",
      "gp": {
       "set": 3,
       "cross": 3,
-      "combo": 0,
+      "combo": 1,
       "counter": 0,
-      "dribble": 0,
+      "dribble": 1,
       "long": 1,
       "mid": 3
      },
      "cp": {
-      "set": 5,
+      "set": 6,
       "cross": 3,
       "combo": 7,
       "counter": 0,
-      "dribble": 2,
+      "dribble": 3,
       "long": 1,
       "mid": 4
      }
@@ -1920,9 +1940,10 @@
      "rest": 7,
      "load": 0,
      "played": 12,
+     "league": "J1",
      "gp": {
       "set": 3,
-      "cross": 1,
+      "cross": 2,
       "combo": 1,
       "counter": 0,
       "dribble": 2,
@@ -1931,21 +1952,21 @@
      },
      "cp": {
       "set": 4,
-      "cross": 6,
-      "combo": 4,
+      "cross": 7,
+      "combo": 5,
       "counter": 0,
       "dribble": 0,
       "long": 0,
-      "mid": 4
+      "mid": 5
      },
      "dist": 900
     },
     "weather": "良好",
     "imp": 1,
     "vote": [
-     38.03,
-     30.68,
-     31.29
+     39.92,
+     31.47,
+     28.61
     ],
     "h2h": {
      "hw": 1,
@@ -1962,10 +1983,11 @@
      "rank": 14,
      "gf": 1.25,
      "ga": 1.58,
-     "form": "勝分分負勝",
+     "form": "分分負勝負",
      "rest": 7,
      "load": 0,
      "played": 12,
+     "league": "J1",
      "gp": {
       "set": 2,
       "cross": 0,
@@ -1978,7 +2000,7 @@
      "cp": {
       "set": 4,
       "cross": 4,
-      "combo": 4,
+      "combo": 5,
       "counter": 0,
       "dribble": 1,
       "long": 1,
@@ -1994,18 +2016,19 @@
      "rest": 7,
      "load": 0,
      "played": 12,
+     "league": "J1",
      "gp": {
       "set": 1,
-      "cross": 2,
-      "combo": 2,
+      "cross": 3,
+      "combo": 3,
       "counter": 0,
       "dribble": 1,
       "long": 0,
-      "mid": 0
+      "mid": 1
      },
      "cp": {
       "set": 3,
-      "cross": 3,
+      "cross": 4,
       "combo": 6,
       "counter": 0,
       "dribble": 0,
@@ -2017,9 +2040,9 @@
     "weather": "良好",
     "imp": 1,
     "vote": [
-     51.96,
-     23.84,
-     24.2
+     52.79,
+     24.92,
+     22.29
     ],
     "h2h": {
      "hw": 2,
@@ -2040,6 +2063,7 @@
      "rest": 7,
      "load": 0,
      "played": 12,
+     "league": "J1",
      "gp": {
       "set": 8,
       "cross": 7,
@@ -2066,10 +2090,11 @@
      "ga": 1.75,
      "form": "負負分勝分",
      "rest": 3,
-     "load": 2,
+     "load": 1,
      "played": 12,
+     "league": "J1",
      "gp": {
-      "set": 1,
+      "set": 3,
       "cross": 2,
       "combo": 4,
       "counter": 0,
@@ -2083,17 +2108,17 @@
       "combo": 6,
       "counter": 0,
       "dribble": 1,
-      "long": 0,
-      "mid": 1
+      "long": 1,
+      "mid": 2
      },
      "dist": 350
     },
     "weather": "良好",
     "imp": 1,
     "vote": [
-     65.61,
-     17.27,
-     17.12
+     74.32,
+     13.89,
+     11.79
     ],
     "h2h": {
      "hw": 3,
@@ -2110,21 +2135,22 @@
      "rank": 9,
      "gf": 1.33,
      "ga": 1.0,
-     "form": "分勝分分分",
+     "form": "勝分分分分",
      "rest": 3,
      "load": 1,
      "played": 12,
+     "league": "J1",
      "gp": {
       "set": 2,
       "cross": 3,
-      "combo": 5,
+      "combo": 6,
       "counter": 0,
       "dribble": 0,
       "long": 0,
       "mid": 5
      },
      "cp": {
-      "set": 2,
+      "set": 3,
       "cross": 2,
       "combo": 3,
       "counter": 0,
@@ -2134,18 +2160,19 @@
      }
     },
     "a": {
-     "rating": 74,
-     "rank": 8,
-     "gf": 2.09,
-     "ga": 1.55,
-     "form": "勝分負勝勝",
+     "rating": 75,
+     "rank": 6,
+     "gf": 2.08,
+     "ga": 1.5,
+     "form": "分負勝勝勝",
      "rest": 3,
      "load": 1,
-     "played": 11,
+     "played": 12,
+     "league": "J1",
      "gp": {
       "set": 2,
-      "cross": 4,
-      "combo": 8,
+      "cross": 5,
+      "combo": 9,
       "counter": 0,
       "dribble": 1,
       "long": 2,
@@ -2158,16 +2185,16 @@
       "counter": 0,
       "dribble": 0,
       "long": 0,
-      "mid": 5
+      "mid": 6
      },
      "dist": 0
     },
     "weather": "良好",
     "imp": 1,
     "vote": [
-     31.1,
-     29.62,
-     39.28
+     27.41,
+     26.89,
+     45.7
     ],
     "h2h": {
      "hw": 2,
@@ -2184,14 +2211,15 @@
      "rank": 1,
      "gf": 1.69,
      "ga": 0.85,
-     "form": "勝勝勝分勝",
+     "form": "勝勝分勝負",
      "rest": 6,
      "load": 0,
      "played": 13,
+     "league": "J2",
      "gp": {
       "set": 5,
       "cross": 3,
-      "combo": 8,
+      "combo": 9,
       "counter": 0,
       "dribble": 1,
       "long": 0,
@@ -2199,27 +2227,28 @@
      },
      "cp": {
       "set": 5,
-      "cross": 1,
+      "cross": 2,
       "combo": 0,
       "counter": 0,
-      "dribble": 2,
+      "dribble": 3,
       "long": 1,
       "mid": 0
      }
     },
     "a": {
      "rating": 74,
-     "rank": 5,
+     "rank": 6,
      "gf": 1.77,
      "ga": 1.23,
      "form": "分勝負負分",
      "rest": 6,
      "load": 0,
      "played": 13,
+     "league": "J2",
      "gp": {
-      "set": 6,
+      "set": 7,
       "cross": 1,
-      "combo": 7,
+      "combo": 8,
       "counter": 0,
       "dribble": 2,
       "long": 1,
@@ -2227,10 +2256,10 @@
      },
      "cp": {
       "set": 5,
-      "cross": 2,
+      "cross": 3,
       "combo": 4,
       "counter": 0,
-      "dribble": 2,
+      "dribble": 3,
       "long": 0,
       "mid": 1
      },
@@ -2239,9 +2268,9 @@
     "weather": "良好",
     "imp": 1,
     "vote": [
-     53.9,
-     21.37,
-     24.73
+     58.05,
+     21.74,
+     20.21
     ],
     "h2h": {
      "hw": 1,
@@ -2258,23 +2287,24 @@
      "rank": 2,
      "gf": 1.46,
      "ga": 1.62,
-     "form": "分勝分負勝",
+     "form": "勝分負勝勝",
      "rest": 6,
      "load": 0,
      "played": 13,
+     "league": "J2",
      "gp": {
       "set": 4,
-      "cross": 6,
+      "cross": 7,
       "combo": 3,
       "counter": 0,
-      "dribble": 1,
+      "dribble": 2,
       "long": 0,
       "mid": 3
      },
      "cp": {
       "set": 5,
       "cross": 5,
-      "combo": 6,
+      "combo": 7,
       "counter": 0,
       "dribble": 0,
       "long": 0,
@@ -2286,10 +2316,11 @@
      "rank": 3,
      "gf": 1.77,
      "ga": 0.92,
-     "form": "分勝分分勝",
+     "form": "勝分分勝負",
      "rest": 6,
      "load": 0,
      "played": 13,
+     "league": "J2",
      "gp": {
       "set": 3,
       "cross": 8,
@@ -2302,7 +2333,7 @@
      "cp": {
       "set": 4,
       "cross": 2,
-      "combo": 0,
+      "combo": 1,
       "counter": 0,
       "dribble": 1,
       "long": 0,
@@ -2313,9 +2344,9 @@
     "weather": "良好",
     "imp": 1,
     "vote": [
-     43.83,
-     25.93,
-     30.24
+     51.2,
+     22.36,
+     26.44
     ],
     "h2h": {
      "hw": 0,
@@ -2329,21 +2360,22 @@
     "away": "大分",
     "h": {
      "rating": 73,
-     "rank": 6,
+     "rank": 7,
      "gf": 1.46,
      "ga": 1.23,
-     "form": "勝分分分勝",
+     "form": "分分分勝勝",
      "rest": 6,
      "load": 0,
      "played": 13,
+     "league": "J2",
      "gp": {
       "set": 3,
       "cross": 2,
-      "combo": 3,
+      "combo": 4,
       "counter": 0,
       "dribble": 3,
       "long": 1,
-      "mid": 5
+      "mid": 6
      },
      "cp": {
       "set": 4,
@@ -2357,16 +2389,17 @@
     },
     "a": {
      "rating": 73,
-     "rank": 7,
+     "rank": 8,
      "gf": 1.31,
      "ga": 0.77,
-     "form": "分勝勝勝分",
+     "form": "勝勝勝分分",
      "rest": 6,
      "load": 0,
      "played": 13,
+     "league": "J2",
      "gp": {
       "set": 7,
-      "cross": 4,
+      "cross": 5,
       "combo": 3,
       "counter": 0,
       "dribble": 1,
@@ -2375,7 +2408,7 @@
      },
      "cp": {
       "set": 5,
-      "cross": 0,
+      "cross": 1,
       "combo": 2,
       "counter": 0,
       "dribble": 0,
@@ -2387,9 +2420,9 @@
     "weather": "良好",
     "imp": 1,
     "vote": [
-     41.16,
-     27.85,
-     30.99
+     41.1,
+     30.36,
+     28.54
     ],
     "h2h": {
      "hw": 2,
@@ -2411,7 +2444,7 @@
       m.home = x.home; m.away = x.away;
       for (const side of ["h", "a"]) {
         const src = x[side], t = m.f[side];
-        ["rating", "rank", "form", "rest", "load", "played"].forEach(k => { if (src[k] != null) t[k] = src[k]; });
+        ["rating", "rank", "form", "rest", "load", "played", "league"].forEach(k => { if (src[k] != null) t[k] = src[k]; });
         if (src.gf != null) t.gf = String(src.gf);
         if (src.ga != null) t.ga = String(src.ga);
         if (src.dist != null) t.dist = src.dist;
