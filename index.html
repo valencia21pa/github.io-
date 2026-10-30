@@ -774,6 +774,7 @@
         <label>実際の結果（試合後）<select data-m="result">${opt([["", "未入力"]].concat(OUT.map((o, k) => [k, o])), m.f.result)}</select></label>
       </div>
       <div class="fx-out">
+        ${[m.f.h, m.f.a].some(t => t.news) ? `<div class="note">${[[m.home, m.f.h], [m.away, m.f.a]].filter(([, t]) => t.news).map(([n, t]) => `【${esc(n)}】${esc(t.news)}`).join("　")}</div>` : ""}
         ${m.vote && !m.vote.h ? `投票率 1: <b>${m.vote[0]}%</b>　0: <b>${m.vote[1]}%</b>　2: <b>${m.vote[2]}%</b><br>` : ""}
         期待得点 <b>${r.lh.toFixed(2)} − ${r.la.toFixed(2)}</b> ／ 最も可能性が高いスコア <b>${r.score}</b><br>
         モデル 1: <b>${pc(r.probs[0])}</b>　0: <b>${pc(r.probs[1])}</b>　2: <b>${pc(r.probs[2])}</b>
@@ -1655,7 +1656,14 @@
       "long": 0,
       "mid": 4
      },
-     "dist": 200
+     "dist": 200,
+     "inj": {
+      "gk": 0,
+      "df": 0,
+      "mf": 1,
+      "fw": 0
+     },
+     "news": "MF高嶺朋樹 出場停止"
     },
     "weather": "良好",
     "imp": 1,
@@ -1701,7 +1709,14 @@
       "dribble": 4,
       "long": 1,
       "mid": 5
-     }
+     },
+     "inj": {
+      "gk": 0,
+      "df": 1,
+      "mf": 0,
+      "fw": 0
+     },
+     "news": "DFキム・テヒョン 右脛骨近位端骨折（10/29発表）"
     },
     "a": {
      "rating": 70,
@@ -1853,7 +1868,14 @@
       "dribble": 3,
       "long": 0,
       "mid": 8
-     }
+     },
+     "inj": {
+      "gk": 0,
+      "df": 1,
+      "mf": 0,
+      "fw": 0
+     },
+     "news": "DF佐藤響 出場停止（警告累積）"
     },
     "a": {
      "rating": 69,
@@ -1959,7 +1981,14 @@
       "long": 0,
       "mid": 5
      },
-     "dist": 900
+     "dist": 900,
+     "inj": {
+      "gk": 0,
+      "df": 0,
+      "mf": 0,
+      "fw": 1
+     },
+     "news": "FW福島和毅 負傷で手術"
     },
     "weather": "良好",
     "imp": 1,
@@ -2035,7 +2064,14 @@
       "long": 0,
       "mid": 8
      },
-     "dist": 950
+     "dist": 950,
+     "inj": {
+      "gk": 0,
+      "df": 0,
+      "mf": 1,
+      "fw": 0
+     },
+     "news": "MF森田晃樹 左鎖骨骨折 全治6〜10週"
     },
     "weather": "良好",
     "imp": 1,
@@ -2060,8 +2096,8 @@
      "gf": 2.5,
      "ga": 0.83,
      "form": "負勝勝勝分",
-     "rest": 7,
-     "load": 0,
+     "rest": 3,
+     "load": 1,
      "played": 12,
      "league": "J1",
      "gp": {
@@ -2081,7 +2117,8 @@
       "dribble": 1,
       "long": 1,
       "mid": 1
-     }
+     },
+     "news": "10/29 ACL2 上海申花戦（アウェイ1-0勝ち）から中2日、上海から帰国"
     },
     "a": {
      "rating": 69,
@@ -2111,7 +2148,14 @@
       "long": 1,
       "mid": 2
      },
-     "dist": 350
+     "dist": 350,
+     "inj": {
+      "gk": 1,
+      "df": 0,
+      "mf": 0,
+      "fw": 0
+     },
+     "news": "GK一森純 出場停止"
     },
     "weather": "良好",
     "imp": 1,
@@ -2157,7 +2201,14 @@
       "dribble": 0,
       "long": 0,
       "mid": 4
-     }
+     },
+     "inj": {
+      "gk": 0,
+      "df": 0,
+      "mf": 1,
+      "fw": 0
+     },
+     "news": "MF知念慶 全治6〜8週"
     },
     "a": {
      "rating": 75,
@@ -2263,7 +2314,14 @@
       "long": 0,
       "mid": 1
      },
-     "dist": 300
+     "dist": 300,
+     "inj": {
+      "gk": 0,
+      "df": 0,
+      "mf": 1,
+      "fw": 0
+     },
+     "news": "MF加藤玄 出場停止（警告累積）"
     },
     "weather": "良好",
     "imp": 1,
@@ -2339,7 +2397,14 @@
       "long": 0,
       "mid": 4
      },
-     "dist": 200
+     "dist": 200,
+     "inj": {
+      "gk": 0,
+      "df": 1,
+      "mf": 0,
+      "fw": 0
+     },
+     "news": "DF深澤壯太 両肩関節唇損傷 全治約6か月"
     },
     "weather": "良好",
     "imp": 1,
@@ -2450,6 +2515,8 @@
         if (src.dist != null) t.dist = src.dist;
         if (src.gp) Object.assign(t.gp, src.gp);
         if (src.cp) Object.assign(t.cp, src.cp);
+        if (src.inj) Object.assign(t.inj, src.inj);
+        if (src.news) t.news = src.news;
         t.imp = x.imp ?? 1;
       }
       if (x.weather) m.f.weather = x.weather;
