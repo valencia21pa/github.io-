@@ -178,6 +178,7 @@
       </label>
     </div>
     <div class="row" style="margin-top:12px">
+      <label class="chk" style="align-self:center"><input type="checkbox" id="j2Double" checked>J2の試合はダブル優先</label>
       <button id="btnModelAll">全試合を要素から計算</button>
       <button id="btnOptimize" class="primary">最適化して予想</button>
       <button id="btnRandom">確率ランダム（シングル）</button>
@@ -211,6 +212,7 @@
         <li><b>引き分けの分析</b>：期待総得点の少なさ、力の拮抗、両チームの得点・失点の少なさ、終盤の点の動きやすさ、過去の対戦の引き分け率、天候から、引き分けになりやすい理由を表示します。</li>
         <li><b>主審</b>：主審名を入れると、今季の担当試合でのホーム勝ち・引き分け・アウェイ勝ちの割合と平均総得点をリーグ平均（ホーム44%・引き分け26%・アウェイ30%、2.76点）と比べて反映します。試合数が少ない主審ほど効きを弱めます。</li>
         <li><b>試合環境</b>：ホームアドバンテージ（J1は約1.07倍、J2は約1.16倍。今季のtoto対象195試合の実績＝ホーム勝ち44%・引き分け20%・アウェイ勝ち36%に合わせた値）、過去の対戦成績、天候・ピッチ（雨やピッチ不良は得点が減り、ポゼッションが不利・ロングボールが有利など）、審判の傾向。</li>
+        <li><b>J2はダブル優先</b>：買い目を決めるとき、J2の試合の確率を均等寄りにならしてダブルが回りやすくします（表示する確率は変えません）。今季のJ2は順位差が小さく、上位のホームでも負けるため、本命単独の的中率がJ1より低いことへの対策です。</li>
         <li>各要素の重みは「4. 過去の結果で重みを調整」で、記録した実際の結果に合わせて自動調整できます。</li>
       </ul>
     </details>
@@ -653,6 +655,7 @@
     $("budget").value = state.budget;
     $("unit").value = state.unit;
     $("leagueAvg").value = state.leagueAvg;
+    $("j2Double").checked = state.j2Double !== false;
     renderCalib();
     const tb = $("tbody");
     tb.innerHTML = "";
@@ -923,8 +926,13 @@
   function optimize() {
     const maxLines = Math.floor(state.budget / state.unit);
     if (maxLines < 1) { $("msg").textContent = "予算が1口分に足りません。"; return; }
+    // J2 は今季の予想的中率が低い（順位差が小さく上位のホームも負ける）ので、
+    // 買い目を決めるときだけ確率を均等寄りにならして、ダブルが J2 に回りやすくする
+    const J2_FLATTEN = 0.25;
     const order = state.matches.map(m => {
-      const pr = probs(m);
+      let pr = probs(m);
+      if (state.j2Double !== false && [m.f.h.league, m.f.a.league].includes("J2"))
+        pr = pr.map(x => (1 - J2_FLATTEN) * x + J2_FLATTEN / 3);
       return [0, 1, 2].sort((a, b) => pr[b] - pr[a]).map(k => ({ k, p: pr[k] }));
     });
     // dp: 口数 -> { lp: log(的中確率), levels: 各試合の選択数 }
@@ -999,6 +1007,7 @@
   $("budget").addEventListener("change", e => { state.budget = Math.max(0, +e.target.value || 0); save(); summarize(); });
   $("unit").addEventListener("change", e => { state.unit = Math.max(1, +e.target.value || 100); save(); summarize(); });
   $("btnOptimize").addEventListener("click", optimize);
+  $("j2Double").addEventListener("change", e => { state.j2Double = e.target.checked; save(); optimize(); });
   $("leagueAvg").addEventListener("change", e => {
     state.leagueAvg = clamp(Number(e.target.value) || 1.43, 0.5, 3); state.matches.forEach(applyModel); save(); render();
   });
