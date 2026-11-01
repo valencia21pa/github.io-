@@ -250,7 +250,7 @@ function renderGuide(opp) {
       <ul class="tips">${(opp.tips || []).map(t => `<li>${esc(t)}</li>`).join("") || "<li class='muted'>まだ情報がありません。下のメモ欄に書き込んでください。</li>"}</ul>`;
   }
   const sections = GUIDE_SECTIONS.filter(s => (g[s.key] || []).length).map((s, i) => `
-    <details class="guide" ${i < 2 ? "open" : ""}>
+    <details class="guide" ${!(g.focus || []).length && i < 2 ? "open" : ""}>
       <summary><span class="g-icon ${s.key}">${s.icon}</span>${s.label}<span class="muted g-count">${g[s.key].length}</span></summary>
       <ul class="tips">${g[s.key].map(t => `<li>${esc(t)}</li>`).join("")}</ul>
     </details>`).join("");
@@ -263,7 +263,11 @@ function renderGuide(opp) {
       </div>
     </div>
     <p class="core">${esc(g.core)}</p>
-    <div class="row between" style="margin:6px 0 2px"><h3 style="margin:0">対策の基本</h3><button class="small" id="guideToggle">すべて開く</button></div>
+    ${(g.focus || []).length ? `<div class="focus"><h3>まずこれ</h3><ul>${g.focus.map(t => {
+      const m = /^■([^：:]+)[：:]\s*(.*)$/s.exec(t);
+      return m ? `<li><b>${esc(m[1])}</b>${esc(m[2])}</li>` : `<li>${esc(t)}</li>`;
+    }).join("")}</ul></div>` : ""}
+    <div class="row between" style="margin:6px 0 2px"><h3 style="margin:0">詳しい対策</h3><button class="small" id="guideToggle">すべて開く</button></div>
     ${sections}`;
 }
 function renderMatchup() {

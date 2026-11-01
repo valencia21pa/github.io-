@@ -86,6 +86,12 @@ button[data-armed] { background: var(--lose); border-color: var(--lose); color: 
 .card h3 { margin: 12px 0 6px; font-size: .95rem; }
 .card.aba { border-left: 4px solid var(--accent); }
 .core { margin: 6px 0 10px; padding: 10px 12px; background: var(--panel-2); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; font-weight: 500; }
+.focus { margin: 4px 0 12px; padding: 10px 12px 6px; background: var(--accent-soft); border-radius: 10px; }
+.focus h3 { margin: 0 0 6px; font-size: .95rem; color: var(--accent); }
+.focus ul { margin: 0; padding: 0; list-style: none; }
+.focus li { padding: 5px 0; border-top: 1px dashed var(--line); line-height: 1.5; }
+.focus li:first-child { border-top: 0; }
+.focus li b { display: inline-block; min-width: 4.2em; margin-right: 4px; color: var(--accent); }
 details.guide { border-top: 1px solid var(--line); }
 details.guide summary { cursor: pointer; padding: 8px 2px; font-weight: 700; display: flex; align-items: center; gap: 8px; list-style: none; }
 details.guide summary::-webkit-details-marker { display: none; }
