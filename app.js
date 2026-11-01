@@ -263,9 +263,13 @@ function renderGuide(opp) {
       </div>
     </div>
     <p class="core">${esc(g.core)}</p>
-    ${(g.focus || []).length ? `<div class="focus"><h3>まずこれ</h3><ul>${g.focus.map(t => {
+    ${(g.focus || []).length ? `<div class="focus"><div class="row between"><h3>まずこれ</h3><button class="small" data-gotab="drills">練習タブへ</button></div><ul>${g.focus.map((t, fi) => {
       const m = /^■([^：:]+)[：:]\s*(.*)$/s.exec(t);
-      return m ? `<li><b>${esc(m[1])}</b>${esc(m[2])}</li>` : `<li>${esc(t)}</li>`;
+      const dl = focusDrills(opp.id, fi), d = pairData();
+      return `<li>${m ? `<b>${esc(m[1])}</b>${esc(m[2])}` : esc(t)}${dl.map(it => `
+        <details class="fdrill ${d.drills[it.id] ? "done" : ""}"><summary><input type="checkbox" data-drill="${it.id}" ${d.drills[it.id] ? "checked" : ""} aria-label="合格"><span>練習：${esc(it.title)}</span></summary>
+          <dl class="drill-steps"><dt>記録</dt><dd>${esc(it.record)}</dd><dt>やる</dt><dd>${esc(it.action)}</dd><dt>合格</dt><dd>${esc(it.pass)}</dd></dl>
+        </details>`).join("")}</li>`;
     }).join("")}</ul></div>` : ""}
     <div class="row between" style="margin:6px 0 2px"><h3 style="margin:0">詳しい対策</h3><button class="small" id="guideToggle">すべて開く</button></div>
     ${sections}`;
@@ -420,6 +424,10 @@ function renderFramesStatus() {
 
 // ---- 練習タブ ----
 const norm = (t) => typeof t === "string" ? { title: t } : t;
+// 「まずこれ」の行 fi に紐付くキャラ固有の練習（CHAR_DRILLS の focus で対応付け）
+function focusDrills(oppId, fi) {
+  return (CHAR_DRILLS[oppId] || []).map((t, i) => ({ id: "k" + i, ...norm(t) })).filter(it => it.focus === fi);
+}
 function drillsFor(oppId, d) {
   // 並び: 動画分析から追加 → キャラ固有 → 自分で追加 → 共通（折りたたみ）
   const custom = d.customDrills.map((t, i) => ({ id: "u" + i, ...norm(t), custom: true }));
@@ -437,12 +445,14 @@ function drillProgress(mine, opp) {
 }
 const fmtAdded = v => v ? v.slice(5).replace("-", "/") : "";
 function drillItem(it, d) {
+  const fl = it.focus != null ? ((charById(state.opp).guide || {}).focus || [])[it.focus] : null;
   const meta = [it.from ? `<span class="tag neutral">${esc(it.from)}</span>` : "", it.added ? `<span class="muted small">追加 ${esc(fmtAdded(it.added))}</span>` : ""].filter(Boolean).join(" ");
   return `
     <li class="${d.drills[it.id] ? "done" : ""}">
       <input type="checkbox" id="dr-${it.id}" data-drill="${it.id}" ${d.drills[it.id] ? "checked" : ""}>
       <div class="drill">
         <label for="dr-${it.id}">${esc(it.title)}${meta ? " " + meta : ""}</label>
+        ${fl ? `<div class="muted small drill-why">対策：${esc(fl.replace(/^■/, ""))}</div>` : ""}
         ${it.record ? `<dl class="drill-steps">
           <dt>記録</dt><dd>${esc(it.record)}</dd>
           <dt>やる</dt><dd>${esc(it.action)}</dd>
@@ -734,7 +744,13 @@ $("framesBody").addEventListener("change", e => {
   if (e.target.id === "frameSort") { frameFilter.sort = e.target.value; renderFrames(); }
 });
 
-// 練習
+// 練習（練習タブと、対策タブの「まずこれ」内の練習の両方）
+$("tab-matchup").addEventListener("click", e => { if (e.target.dataset.gotab) showTab(e.target.dataset.gotab); });
+$("tab-matchup").addEventListener("change", e => {
+  const id = e.target.dataset.drill; if (!id) return;
+  const d = pairData(); if (e.target.checked) d.drills[id] = true; else delete d.drills[id];
+  save(true); e.target.closest(".fdrill")?.classList.toggle("done", e.target.checked);
+});
 $("tab-drills").addEventListener("change", e => {
   const id = e.target.dataset.drill; if (!id) return;
   if (id.startsWith("g")) {

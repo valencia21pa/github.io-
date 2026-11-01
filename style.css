@@ -92,6 +92,15 @@ button[data-armed] { background: var(--lose); border-color: var(--lose); color: 
 .focus li { padding: 5px 0; border-top: 1px dashed var(--line); line-height: 1.5; }
 .focus li:first-child { border-top: 0; }
 .focus li b { display: inline-block; min-width: 4.2em; margin-right: 4px; color: var(--accent); }
+.focus .row h3 { margin: 0 0 6px; }
+.fdrill { margin: 6px 0 2px; padding: 4px 8px; background: var(--panel); border-radius: 8px; border: 1px solid var(--line); }
+.fdrill summary { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; font-size: .92rem; font-weight: 600; }
+.fdrill summary::-webkit-details-marker { display: none; }
+.fdrill summary::after { content: "＋"; margin-left: auto; color: var(--muted); font-weight: 400; }
+.fdrill[open] summary::after { content: "－"; }
+.fdrill.done summary span { text-decoration: line-through; color: var(--muted); }
+.fdrill .drill-steps { margin: 6px 0 4px; }
+.drill-why { margin: 2px 0 4px; line-height: 1.4; }
 details.guide { border-top: 1px solid var(--line); }
 details.guide summary { cursor: pointer; padding: 8px 2px; font-weight: 700; display: flex; align-items: center; gap: 8px; list-style: none; }
 details.guide summary::-webkit-details-marker { display: none; }
