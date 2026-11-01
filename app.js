@@ -264,15 +264,9 @@ function renderGuide(opp) {
       </div>
     </div>
     <p class="core">${esc(g.core)}</p>
-    ${(g.focus || []).length ? `<div class="focus"><div class="row between"><h3>まずこれ</h3><button class="small" data-gotab="drills">練習タブへ</button></div><ul>${g.focus.map((t, fi) => {
+    ${(g.focus || []).length ? `<div class="focus"><h3>まずこれ</h3><ul>${g.focus.map((t, fi) => {
       const m = /^■([^：:]+)[：:]\s*(.*)$/s.exec(t);
-      const dl = focusDrills(opp.id, fi), d = pairData();
-      const reach = dl.map(it => (d.drillNotes || {})[it.id]).filter(Boolean);
-      return `<li>${m ? `<b>${esc(m[1])}</b>${esc(m[2])}` : esc(t)}${reach.length ? `<div class="reach-note">届いた技：${esc(reach.join("／"))}</div>` : ""}${dl.map(it => `
-        <details class="fdrill ${d.drills[it.id] ? "done" : ""}"><summary><input type="checkbox" data-drill="${it.id}" ${d.drills[it.id] ? "checked" : ""} aria-label="合格"><span>練習：${esc(it.title)}</span></summary>
-          <dl class="drill-steps"><dt>記録</dt><dd>${esc(it.record)}</dd><dt>やる</dt><dd>${esc(it.action)}</dd><dt>合格</dt><dd>${esc(it.pass)}</dd></dl>
-          ${needsReach(it, t) ? reachField(it, d) : ""}
-        </details>`).join("")}</li>`;
+      return `<li>${m ? `<b>${esc(m[1])}</b>${esc(m[2])}` : esc(t)}</li>`;
     }).join("")}</ul></div>` : ""}
     <div class="row between" style="margin:6px 0 2px"><h3 style="margin:0">詳しい対策</h3><button class="small" id="guideToggle">すべて開く</button></div>
     ${sections}`;
