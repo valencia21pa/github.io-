@@ -17,7 +17,7 @@ const CAUSES = [
 const DL_URL = 'https://www.dustloop.com/wiki/api.php?action=cargoquery&tables=MoveData_GGST&fields=chara,name,input,startup,active,recovery,onBlock,onHit,guard,level&where=chara%3D%22A.B.A%22&limit=500&format=json';
 
 const STORE_KEY = "ggst-matchup-v1";
-const DEFAULT_STATE = () => ({ mine: "aba", opp: "sol", custom: [], pairs: {}, log: [], frames: {}, puddle: [], puddleMeta: {}, globalDrills: [], globalChecks: {} });
+const DEFAULT_STATE = () => ({ mine: "aba", opp: "sol", custom: [], pairs: {}, log: [], frames: {}, puddle: [], puddleMeta: {}, globalDrills: [], globalChecks: {}, links: {} });
 
 // Puddle Farm のキャラ略号 → このツールの id
 const PUDDLE_CODES = { SO: "sol", KY: "ky", MA: "may", AX: "axl", CH: "chipp", PO: "potemkin", FA: "faust", MI: "millia", ZA: "zato", RA: "ramlethal", LE: "leo", NA: "nagoriyuki", GI: "giovanna", AN: "anji", IN: "ino", GO: "goldlewis", JC: "jacko", HA: "chaos", BA: "baiken", TE: "testament", BI: "bridget", SI: "sin", BE: "bedman", AS: "asuka", JN: "johnny", EL: "elphelt", AB: "aba", SL: "slayer", DI: "dizzy", VE: "venom", UN: "unika", LU: "lucy", JA: "jam", RK: "roboky" };
@@ -48,7 +48,7 @@ function save(showMark) {
 // ---- クラウド保存（アーティファクトの db）----
 // ブラウザ内保存（localStorage）はアプリ側の都合で消えることがあるので、
 // アーティファクト上では db にも同じ内容を保存し、起動時に新しい方を採用する
-const SYNC_KEYS = ["mine", "opp", "custom", "pairs", "log", "puddle", "puddleMeta", "globalDrills", "globalChecks", "updatedAt"];
+const SYNC_KEYS = ["mine", "opp", "custom", "pairs", "log", "puddle", "puddleMeta", "globalDrills", "globalChecks", "links", "updatedAt"];
 let cloudDoc = null, cloudTimer = null, cloudBusy = false, cloudDirty = false, cloudState = "off";
 function setCloud(s, msg) { cloudState = s; const el = $("cloudStatus"); if (el) { el.textContent = msg; el.className = "muted cloud " + s; } }
 function pickSync(src) { const o = {}; for (const k of SYNC_KEYS) if (src[k] !== undefined) o[k] = src[k]; return o; }
@@ -72,6 +72,8 @@ function mergeStates(older, newer) {
   out.log = byKey(older.log, newer.log, g => g.id).sort((x, y) => (x.date || "").localeCompare(y.date || ""));
   out.globalDrills = byKey(older.globalDrills, newer.globalDrills, d => d.title);
   out.globalChecks = Object.assign({}, older.globalChecks, newer.globalChecks);
+  out.links = Object.assign({}, older.links);
+  for (const [k, l] of Object.entries(newer.links || {})) out.links[k] = byKey(out.links[k], l, x => x.url);
   out.custom = byKey(older.custom, newer.custom, c => c.id);
   out.puddle = (newer.puddle || []).length ? newer.puddle : (older.puddle || []);
   out.puddleMeta = (newer.puddle || []).length ? newer.puddleMeta : (older.puddleMeta || {});
@@ -243,6 +245,14 @@ const GUIDE_SECTIONS = [
   { key: "corner",  label: "壁際・状況別", icon: "壁" },
   { key: "dont",    label: "やってはいけないこと", icon: "×" },
 ];
+// 参考リンク（キャラごと。自分で追加・削除できる）
+function linksBox(cid) {
+  const l = (state.links || {})[cid] || [];
+  return `<div class="links-box"><h3>参考リンク</h3>
+    ${l.length ? `<ul>${l.map((x, i) => `<li><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title || x.url)}</a>${x.note ? `<div class="muted small">${esc(x.note)}</div>` : ""} <button class="small" data-dellink="${i}" aria-label="削除">×</button></li>`).join("")}</ul>` : `<p class="muted small">まだありません</p>`}
+    <div class="row"><input type="url" id="linkUrl" placeholder="URL を貼る"><input type="text" id="linkTitle" placeholder="名前（任意）"><button class="small" id="linkAdd">追加</button></div>
+  </div>`;
+}
 function renderGuide(opp) {
   const g = opp.guide;
   if (!g) {
@@ -264,6 +274,7 @@ function renderGuide(opp) {
       </div>
     </div>
     <p class="core">${esc(g.core)}</p>
+    ${linksBox(opp.id)}
     ${(g.focus || []).length ? `<div class="focus"><h3>まずこれ</h3><ul>${g.focus.map((t, fi) => {
       const m = /^■([^：:]+)[：:]\s*(.*)$/s.exec(t);
       return `<li>${m ? `<b>${esc(m[1])}</b>${esc(m[2])}` : esc(t)}</li>`;
@@ -749,7 +760,19 @@ $("framesBody").addEventListener("change", e => {
 });
 
 // 練習（練習タブと、対策タブの「まずこれ」内の練習の両方）
-$("tab-matchup").addEventListener("click", e => { if (e.target.dataset.gotab) showTab(e.target.dataset.gotab); });
+$("tab-matchup").addEventListener("click", e => {
+  if (e.target.dataset.gotab) showTab(e.target.dataset.gotab);
+  const cid = state.opp;
+  if (e.target.id === "linkAdd") {
+    const url = $("linkUrl").value.trim(); if (!/^https?:\/\//.test(url)) return;
+    state.links = state.links || {}; (state.links[cid] = state.links[cid] || []).push({ url, title: $("linkTitle").value.trim() });
+    save(true); renderMatchup();
+  }
+  if (e.target.dataset.dellink != null) {
+    if (!armed(e.target, "削除？")) return;
+    state.links[cid].splice(+e.target.dataset.dellink, 1); save(true); renderMatchup();
+  }
+});
 for (const tab of ["tab-matchup", "tab-drills"]) $(tab).addEventListener("input", e => {
   const id = e.target.dataset.reach; if (!id) return;
   const d = pairData(); d.drillNotes = d.drillNotes || {};
