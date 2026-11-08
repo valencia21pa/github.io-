@@ -173,6 +173,9 @@
       <label>1口の金額（円）
         <input type="number" id="unit" min="100" step="100" value="100">
       </label>
+      <label>投票率の反映度（%）
+        <input type="number" id="voteW" min="0" max="100" step="10" value="30">
+      </label>
       <label>リーグ平均得点（1チーム1試合）
         <input type="number" id="leagueAvg" min="0.5" max="3" step="0.05" value="1.43">
       </label>
@@ -214,6 +217,7 @@
         <li><b>引き分けの分析</b>：期待総得点の少なさ、力の拮抗、両チームの得点・失点の少なさ、終盤の点の動きやすさ、過去の対戦の引き分け率、天候から、引き分けになりやすい理由を表示します。</li>
         <li><b>主審</b>：主審名を入れると、今季の担当試合でのホーム勝ち・引き分け・アウェイ勝ちの割合と平均総得点をリーグ平均（ホーム44%・引き分け26%・アウェイ30%、2.76点）と比べて反映します。試合数が少ない主審ほど効きを弱めます。</li>
         <li><b>試合環境</b>：ホームアドバンテージ（J1は約1.07倍、J2は約1.16倍。今季のtoto対象195試合の実績＝ホーム勝ち44%・引き分け20%・アウェイ勝ち36%に合わせた値）、過去の対戦成績、天候・ピッチ（雨やピッチ不良は得点が減り、ポゼッションが不利・ロングボールが有利など）、審判の傾向。</li>
+        <li><b>投票率の反映</b>：toto公式の投票率を、モデルの確率に「反映度」（初期値30%）の割合で混ぜます。払戻金を狙う使い方ではなく、予測の精度を上げるための材料です（3回38試合の検証で、投票率はモデルよりわずかに予測精度が高く、30%混ぜると最も良かった）。0%にすれば使いません。</li>
         <li><b>引き分けを厚く</b>：今季のリーグ戦は1節あたり引き分けがJ1で2つ、J2で3つ出ています。買い目を決めるときだけ引き分けの確率を1.35倍に見て、引き分けを含むダブル・トリプルが選ばれやすくします（表示する確率は変えません）。</li>
         <li><b>J2はダブル優先</b>：買い目を決めるとき、J2の試合の確率を均等寄りにならしてダブルが回りやすくします（表示する確率は変えません）。今季のJ2は順位差が小さく、上位のホームでも負けるため、本命単独の的中率がJ1より低いことへの対策です。</li>
         <li>各要素の重みは「4. 過去の結果で重みを調整」で、記録した実際の結果に合わせて自動調整できます。</li>
@@ -241,6 +245,8 @@
       <div class="stat"><div class="k">1つ外れ以内の確率</div><div class="v" id="sHit1">-</div></div>
       <div class="stat"><div class="k">ダブル / トリプル</div><div class="v" id="sDT">-</div></div>
     </div>
+    <p class="note" style="margin-top:12px">単独にしている試合の信頼度（50%未満は赤）</p>
+    <div class="contrib" id="singles"></div>
     <div id="goal3" style="display:none; margin-top:12px"></div>
     <p class="note" style="margin-top:12px">引き分けの可能性が高い試合</p>
     <ol class="drawlist" id="drawList"></ol>
@@ -387,7 +393,7 @@
   function defaultWeights() { return Object.fromEntries(FACTOR_KEYS.map(k => [k, 1])); }
   function blankTeam(dist) {
     return { rating: 70, rank: 10, coach: 3, newCoach: false, gf: "", ga: "", form: "", venue: "",
-      played: "", lateGF: "", lateGA: "", fwType: "", cbType: "", gp: blankPattern(), cp: blankPattern(), league: "",
+      played: "", lateGF: "", lateGA: "", fwType: "", cbType: "", gp: blankPattern(), cp: blankPattern(), league: "", rotated: false,
       dist, rest: 7, load: 0, inj: { gk: 0, df: 0, mf: 0, fw: 0 }, imp: 1, style: "" };
   }
   function blankFactors() {
@@ -418,6 +424,7 @@
     state.matches.forEach(m => { m.f = fillFactors(m.f); });
     state.w = Object.assign(defaultWeights(), state.w);
     if (state.leagueAvg == null || state.leagueAvg === 1.3) state.leagueAvg = 1.43;
+    if (state.voteW == null) state.voteW = 0.3;
     if (!Array.isArray(state.history)) state.history = [];
   }
 
@@ -425,7 +432,9 @@
 
   // 疲労度（対数スケール）：移動距離 + 中日数 + 前の試合の負担
   function fatigue(t, heat = 1) {
-    const travel = 0.04 * Math.min(Math.max(0, t.dist) / 500, 4);
+    // 今季のACL遠征明け9試合は7勝2分0敗。移動の効きは半分にし、控え中心なら疲労なしとする
+    if (t.rotated) return { travel: 0, rest: 0 };
+    const travel = 0.02 * Math.min(Math.max(0, t.dist) / 500, 4);
     const rest = t.rest <= 2 ? 0.12 : t.rest === 3 ? 0.07 : t.rest === 4 ? 0.03 : 0;
     const load = [0, 0.03, 0.07][t.load] || 0;
     return { travel: travel * heat, rest: (rest + load) * heat };
@@ -527,7 +536,9 @@
     const lh = L * Math.exp((T + R) / 2), la = L * Math.exp((T - R) / 2);
     // 引き分けの上乗せ（引き分けが多いカードはさらに上げる）
     // 終盤に点が動きやすいカードは引き分けが崩れやすい
-    const drawBoost = Math.pow(0.85 * (1 + 0.6 * (hd - 0.2 * n) / (n + 4)) * (rs ? 1 + 0.8 * rs.s * (rs.d - REF_LEAGUE.d) / REF_LEAGUE.d : 1), W["引き分け"] ?? 1)
+    // 今季の引き分け率：J1 24%・J2 27%（3回分の検証でもモデルの引き分けは2〜3ポイント低めだった）
+    const drawBase = (H.league === "J2" ? 1.05 : 0.95);
+    const drawBoost = Math.pow(drawBase * (1 + 0.6 * (hd - 0.24 * n) / (n + 4)) * (rs ? 1 + 0.8 * rs.s * (rs.d - REF_LEAGUE.d) / REF_LEAGUE.d : 1), W["引き分け"] ?? 1)
       * Math.pow(Math.exp(-0.8 * (late.h + late.a - 2 * LATE_AVG)), W["終盤"] ?? 1);
 
     const ph = [], pa = [];
@@ -565,6 +576,7 @@
     if (total < 2 * L * 0.9) why.push(`期待総得点が ${total.toFixed(2)} と少ない`);
     else if (total > 2 * L * 1.15) why.push(`期待総得点が ${total.toFixed(2)} と多く、引き分けにくい`);
     if (Math.abs(r.R) < 0.12) why.push("力が拮抗している");
+    if (f.h.rank && f.a.rank && Math.abs(f.h.rank - f.a.rank) <= 3 && f.h.rank <= 8 && f.a.rank <= 8) why.push("上位同士の接戦（守り合いになりやすい）");
     else if (Math.abs(r.R) > 0.5) why.push("力の差が大きく、引き分けにくい");
     const gfH = num(f.h.gf), gfA = num(f.a.gf), gaH = num(f.h.ga), gaA = num(f.a.ga);
     if (gfH != null && gfA != null && gfH < L * 0.9 && gfA < L * 0.9) why.push("両チームとも得点が少ない");
@@ -582,10 +594,16 @@
     return { p0, level, why };
   }
 
-  // 最終確率（モデルのみ。ブックメーカーのオッズは使わない）
-  function finalProbs(f) {
+  // 最終確率：モデルに、公式の投票率を「反映度」の割合で混ぜる（3回38試合の検証では投票率の予測精度がモデルよりわずかに高く、混ぜると少し改善した）
+  function finalProbs(f, vote) {
     const r = model(f);
-    return { ...r, final: r.probs, pct: roundPct(r.probs) };
+    let p = r.probs;
+    const w = clamp(Number(state.voteW ?? 0.3), 0, 1);
+    if (vote && !vote.h && w > 0) {
+      const s = vote[0] + vote[1] + vote[2];
+      if (s > 0) p = p.map((x, k) => (1 - w) * x + w * vote[k] / s);
+    }
+    return { ...r, final: p, pct: roundPct(p), voteW: vote && !vote.h ? w : 0 };
   }
 
   // 合計がちょうど 100 になるように整数 % へ丸める
@@ -596,7 +614,7 @@
     return fl;
   }
 
-  function applyModel(m) { m.p = finalProbs(m.f).pct; }
+  function applyModel(m) { m.p = finalProbs(m.f, m.vote).pct; }
 
   // ---- 履歴による重みの調整 ----
   function evalHistory(W) {
@@ -658,6 +676,7 @@
     $("budget").value = state.budget;
     $("unit").value = state.unit;
     $("leagueAvg").value = state.leagueAvg;
+    $("voteW").value = Math.round((state.voteW ?? 0.3) * 100);
     $("j2Double").checked = state.j2Double !== false;
     $("drawFocus").checked = state.drawFocus !== false;
     renderCalib();
@@ -711,7 +730,7 @@
     const tr = document.createElement("tr");
     tr.className = "factors";
     tr.hidden = !m.open;
-    const r = finalProbs(m.f);
+    const r = finalProbs(m.f, m.vote);
     const da = drawAnalysis(m.f, r);
     const sign = x => (x >= 0 ? "+" : "−") + Math.abs(x).toFixed(2);
     const opt = (list, cur) => list.map(([v, l]) => `<option value="${esc(v)}"${String(cur) === String(v) ? " selected" : ""}>${esc(l)}</option>`).join("");
@@ -740,6 +759,7 @@
         <label>移動距離（km）${num("dist", t.dist, 'min="0" step="50"')}</label>
         <label>中日数${num("rest", t.rest, 'min="1" max="30"')}</label>
         <label>前の試合の負担${sel("load", LOADS.map((l, k) => [k, l]), t.load)}</label>
+        <label class="chk"><input type="checkbox" data-s="${side}" data-k="rotated"${t.rotated ? " checked" : ""}>前の試合は控え中心（疲労なし）</label>
         <label>主力の欠場：GK${sel("inj.gk", cnt(1), t.inj.gk)}</label>
         <label>主力の欠場：DF${sel("inj.df", cnt(5), t.inj.df)}</label>
         <label>主力の欠場：MF${sel("inj.mf", cnt(5), t.inj.mf)}</label>
@@ -783,7 +803,7 @@
       </div>
       <div class="fx-out">
         ${[m.f.h, m.f.a].some(t => t.news) ? `<div class="note">${[[m.home, m.f.h], [m.away, m.f.a]].filter(([, t]) => t.news).map(([n, t]) => `【${esc(n)}】${esc(t.news)}`).join("　")}</div>` : ""}
-        ${m.vote && !m.vote.h ? `投票率 1: <b>${m.vote[0]}%</b>　0: <b>${m.vote[1]}%</b>　2: <b>${m.vote[2]}%</b><br>` : ""}
+        ${m.vote && !m.vote.h ? `投票率 1: <b>${m.vote[0]}%</b>　0: <b>${m.vote[1]}%</b>　2: <b>${m.vote[2]}%</b>${r.voteW ? `（反映度 ${Math.round(r.voteW * 100)}%で混合）` : ""}<br>` : ""}
         期待得点 <b>${r.lh.toFixed(2)} − ${r.la.toFixed(2)}</b> ／ 最も可能性が高いスコア <b>${r.score}</b><br>
         モデル 1: <b>${pc(r.probs[0])}</b>　0: <b>${pc(r.probs[1])}</b>　2: <b>${pc(r.probs[2])}</b>
         ${patternText(m, r)}
@@ -809,7 +829,7 @@
       const t = m.f[el.dataset.s], k = el.dataset.k;
       if (k.startsWith("inj.")) t.inj[k.slice(4)] = Number(el.value);
       else if (k.startsWith("gp.") || k.startsWith("cp.")) t[k.slice(0, 2)][k.slice(3)] = el.value;
-      else if (k === "newCoach") t[k] = el.checked;
+      else if (k === "newCoach" || k === "rotated") t[k] = el.checked;
       else if (["style", "fwType", "cbType", "form", "venue", "gf", "ga", "played", "lateGF", "lateGA", "league"].includes(k)) t[k] = el.value;
       else t[k] = Math.max(0, Number(el.value) || 0);
       update();
@@ -882,6 +902,11 @@
     if ($("linesWrap").style.display !== "none") showLines();
     renderDrawList();
     renderGoal3();
+    $("singles").innerHTML = state.matches.map((m, i) => {
+      if (m.pick.filter(Boolean).length !== 1) return "";
+      const k = m.pick.indexOf(true), pr = probs(m)[k];
+      return `<span class="${pr < 0.5 ? "neg" : ""}">${i + 1}. ${esc(k === 0 ? m.home : k === 2 ? m.away : "引き分け") || OUT[k]} ${Math.round(pr * 100)}%</span>`;
+    }).join("") || `<span class="note">単独の試合はありません</span>`;
   }
 
   // ポアソン分布から 0 / 1 / 2 / 3点以上 の確率
@@ -1016,6 +1041,9 @@
   $("btnOptimize").addEventListener("click", optimize);
   $("j2Double").addEventListener("change", e => { state.j2Double = e.target.checked; save(); optimize(); });
   $("drawFocus").addEventListener("change", e => { state.drawFocus = e.target.checked; save(); optimize(); });
+  $("voteW").addEventListener("change", e => {
+    state.voteW = clamp((Number(e.target.value) || 0) / 100, 0, 1); state.matches.forEach(applyModel); save(); render();
+  });
   $("leagueAvg").addEventListener("change", e => {
     state.leagueAvg = clamp(Number(e.target.value) || 1.43, 0.5, 3); state.matches.forEach(applyModel); save(); render();
   });
@@ -3579,7 +3607,7 @@
       m.home = x.home; m.away = x.away;
       for (const side of ["h", "a"]) {
         const src = x[side], t = m.f[side];
-        ["rating", "rank", "form", "rest", "load", "played", "league"].forEach(k => { if (src[k] != null) t[k] = src[k]; });
+        ["rating", "rank", "form", "rest", "load", "played", "league", "rotated"].forEach(k => { if (src[k] != null) t[k] = src[k]; });
         if (src.gf != null) t.gf = String(src.gf);
         if (src.ga != null) t.ga = String(src.ga);
         if (src.dist != null) t.dist = src.dist;
