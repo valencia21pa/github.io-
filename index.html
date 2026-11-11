@@ -186,12 +186,9 @@
       <button id="btnModelAll">全試合を要素から計算</button>
       <button id="btnOptimize" class="primary">最適化して予想</button>
       <button id="btnRandom">確率ランダム（シングル）</button>
-      <button id="btnSample">第1665回を読み込む</button>
-      <button data-round="1666">第1666回 GOAL3を読み込む</button>
-      <button data-round="1668">第1668回を読み込む</button>
-      <button data-round="1670">第1670回を読み込む</button>
-      <button data-round="1671">第1671回 GOAL3を読み込む</button>
-      <button data-round="1672">第1672回を読み込む</button>
+      <label>開催回を読み込む
+        <select id="roundSelect"></select>
+      </label>
       <button id="btnReset">リセット</button>
     </div>
     <details style="margin-top:12px">
@@ -681,6 +678,7 @@
     $("voteW").value = Math.round((state.voteW ?? 0.3) * 100);
     $("j2Double").checked = state.j2Double !== false;
     $("drawFocus").checked = state.drawFocus !== false;
+    if ($("roundSelect").querySelector(`option[value="${state.sampleId}"]`)) $("roundSelect").value = state.sampleId || "";
     renderCalib();
     const tb = $("tbody");
     tb.innerHTML = "";
@@ -1225,10 +1223,13 @@
     });
     return true;
   }
-  $("btnSample").addEventListener("click", () => {
-    loadSample();
-    if (saveRoundToHistory("1665")) { save(); render(); $("msg").textContent += " 第1665回の公式結果を履歴に保存しました。"; }
-  });
+  function loadAnyRound(id) {
+    if (id === "1665") {
+      loadSample();
+      if (saveRoundToHistory("1665")) { save(); render(); $("msg").textContent += " 第1665回の公式結果を履歴に保存しました。"; }
+    } else loadRound(id);
+    $("roundSelect").value = id;
+  }
 
   // 公式サイト・Football LAB から取得した回ごとのデータ
   const ROUNDS = {
@@ -4956,7 +4957,17 @@
     $("msg").textContent = R.label + "：" + R.note;
     if (saveRoundToHistory(id)) { save(); render(); $("msg").textContent += " この回の公式結果を履歴に保存しました。"; }
   }
-  document.querySelectorAll("[data-round]").forEach(b => b.addEventListener("click", () => loadRound(b.dataset.round)));
+  // 開催回のドロップダウン：最新回が一番上。選ぶと読み込む
+  (() => {
+    const ids = Object.keys(ROUNDS).concat(["1665"]).sort((a, b) => Number(b) - Number(a));
+    const sel = $("roundSelect");
+    sel.innerHTML = `<option value="">選択してください</option>` + ids.map(id => {
+      const label = ROUNDS[id] ? ROUNDS[id].label : "第1665回 toto（10/24・25）";
+      const done = ROUND_RESULTS[id] ? "　結果あり" : "";
+      return `<option value="${id}">${esc(label)}${done}</option>`;
+    }).join("");
+    sel.addEventListener("change", e => { if (e.target.value) loadAnyRound(e.target.value); });
+  })();
 
   $("refList").innerHTML = Object.keys(REFEREES).map(n => `<option value="${esc(n)}">`).join("");
   ensureMatches();
