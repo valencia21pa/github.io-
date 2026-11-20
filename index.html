@@ -328,7 +328,7 @@
   }
 
   const FACTOR_KEYS = ["能力", "順位", "監督", "監督交代", "攻守", "調子", "会場別成績", "ホーム", "移動", "負担",
-    "欠場", "戦術", "FW対DF", "パターン", "重要度", "対戦成績", "天候", "審判", "終盤", "引き分け"];
+    "欠場", "戦術", "FW対DF", "パターン", "重要度", "対戦成績", "天候", "審判", "終盤", "引き分け", "代表帰り"];
   // 得点・失点パターン（Football LAB などの分類をまとめたもの）と、リーグ平均のおおよその割合
   const PATTERNS = [
     ["set", "セットプレー", 0.30], ["cross", "クロス", 0.18], ["combo", "崩し（ショート・スルーパス）", 0.22],
@@ -393,7 +393,7 @@
   function blankTeam(dist) {
     return { rating: 70, rank: 10, coach: 3, newCoach: false, gf: "", ga: "", form: "", venue: "",
       played: "", lateGF: "", lateGA: "", fwType: "", cbType: "", gp: blankPattern(), cp: blankPattern(), league: "", rotated: false,
-      dist, rest: 7, load: 0, inj: { gk: 0, df: 0, mf: 0, fw: 0 }, imp: 1, style: "" };
+      dist, rest: 7, load: 0, inj: { gk: 0, df: 0, mf: 0, fw: 0 }, imp: 1, style: "", natl: 0, natlFar: false, natlCond: 0 };
   }
   function blankFactors() {
     return { h: blankTeam(0), a: blankTeam(300), adj: 0, h2h: { hw: 0, d: 0, aw: 0 },
@@ -466,6 +466,17 @@
     return { att: -(0.02 * mf + 0.05 * fw), leak: 0.10 * gk + 0.04 * df + 0.02 * mf };
   }
 
+  // 代表帰り：A代表・主力の人数ぶん疲労（長距離遠征は2倍）。代表での調子（好調/疲労）は攻撃面に反映
+  // 係数は今季の代表ウィーク明けデータと文献で調整する（NATL_*）
+  const NATL_FATIGUE = 0.012, NATL_FAR = 2, NATL_COND = 0.02;
+  function natlEffect(t) {
+    const n = clamp(Number(t.natl) || 0, 0, 6);
+    if (!n) return { att: 0, leak: 0 };
+    const fat = NATL_FATIGUE * n * (t.natlFar ? NATL_FAR : 1);
+    const cond = NATL_COND * n * clamp(Number(t.natlCond) || 0, -1, 1);
+    return { att: -fat + cond, leak: 0.5 * fat };
+  }
+
   // 要素から期待得点と 1/0/2 の確率を計算（W: 要素ごとの重み）
   function model(f, W = state.w) {
     const L = Number(state.leagueAvg) || 1.43, H = f.h, A = f.a;
@@ -525,6 +536,10 @@
     // 終盤（85分以降）：自分の終盤得点と相手の終盤失点の平均を「終盤に点を取る力」とする
     const late = lateRates(H, A);
     add("終盤", 0.6 * (late.h - late.a));
+
+    // 代表帰り（疲労は得点を減らし失点を増やす。調子は攻撃面）
+    const nh = natlEffect(H), na = natlEffect(A);
+    add("代表帰り", (nh.att + na.leak) - (na.att + nh.leak), nh.att + na.leak + na.att + nh.leak);
 
     let R = 0, T = 0;
     const parts = {};
@@ -760,6 +775,9 @@
         <label>中日数${num("rest", t.rest, 'min="1" max="30"')}</label>
         <label>前の試合の負担${sel("load", LOADS.map((l, k) => [k, l]), t.load)}</label>
         <label class="chk"><input type="checkbox" data-s="${side}" data-k="rotated"${t.rotated ? " checked" : ""}>前の試合は控え中心（疲労なし）</label>
+        <label>代表帰りの主力（人数）${sel("natl", cnt(6), t.natl || 0)}</label>
+        <label class="chk"><input type="checkbox" data-s="${side}" data-k="natlFar"${t.natlFar ? " checked" : ""}>代表は長距離遠征（時差あり）</label>
+        <label>代表での調子${sel("natlCond", [[1, "好調（得点・好評）"], [0, "普通・不明"], [-1, "疲労・負傷気味"]], t.natlCond || 0)}</label>
         <label>主力の欠場：GK${sel("inj.gk", cnt(1), t.inj.gk)}</label>
         <label>主力の欠場：DF${sel("inj.df", cnt(5), t.inj.df)}</label>
         <label>主力の欠場：MF${sel("inj.mf", cnt(5), t.inj.mf)}</label>
@@ -829,7 +847,8 @@
       const t = m.f[el.dataset.s], k = el.dataset.k;
       if (k.startsWith("inj.")) t.inj[k.slice(4)] = Number(el.value);
       else if (k.startsWith("gp.") || k.startsWith("cp.")) t[k.slice(0, 2)][k.slice(3)] = el.value;
-      else if (k === "newCoach" || k === "rotated") t[k] = el.checked;
+      else if (k === "newCoach" || k === "rotated" || k === "natlFar") t[k] = el.checked;
+      else if (k === "natlCond") t[k] = clamp(Number(el.value) || 0, -1, 1);
       else if (["style", "fwType", "cbType", "form", "venue", "gf", "ga", "played", "lateGF", "lateGA", "league"].includes(k)) t[k] = el.value;
       else t[k] = Math.max(0, Number(el.value) || 0);
       update();
@@ -6045,7 +6064,7 @@
       m.home = x.home; m.away = x.away;
       for (const side of ["h", "a"]) {
         const src = x[side], t = m.f[side];
-        ["rating", "rank", "form", "rest", "load", "played", "league", "rotated", "newCoach"].forEach(k => { if (src[k] != null) t[k] = src[k]; });
+        ["rating", "rank", "form", "rest", "load", "played", "league", "rotated", "newCoach", "natl", "natlFar", "natlCond"].forEach(k => { if (src[k] != null) t[k] = src[k]; });
         if (src.gf != null) t.gf = String(src.gf);
         if (src.ga != null) t.ga = String(src.ga);
         if (src.dist != null) t.dist = src.dist;
